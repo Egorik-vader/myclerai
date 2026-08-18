@@ -15,7 +15,7 @@ from aiohttp import web
 from aiogram import Bot, Dispatcher
 from config import TOKEN
 import asyncio
-from ChatComplete.app.handlers import router
+from app.handlers import router
 from app.handlers import router
 
 async def handle(request):
