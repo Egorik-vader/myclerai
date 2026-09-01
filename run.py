@@ -1,6 +1,6 @@
 import aiogram
 import logging
-from aiogram import Bot,Dispatcher
+from aiogram import Bot, Dispatcher
 import asyncio
 import os
 import aiohttp
@@ -12,11 +12,8 @@ except:
     pass
 
 from aiohttp import web
-from aiogram import Bot, Dispatcher
 from config import TOKEN
-import asyncio
-from app.handlers import router
-from app.handlers import router
+from app.handlers import router  # только один раз
 
 async def handle(request):
     return web.Response(text="Bot is live")
@@ -34,19 +31,15 @@ async def start_web_server():
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
 
-
 async def main():
-
+    # Подключаем роутер только один раз
     dp.include_router(router)
     await start_web_server()
     await dp.start_polling(bot)
-
-
 
 if __name__ == "__main__":
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
         print("Exit")
-if __name__ == '__main__':
-    asyncio.run(main())
+    # Убираем дублирующий вызов asyncio.run(main())
