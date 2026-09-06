@@ -1,5 +1,3 @@
-# osint_functions.py - Добавляем saverudata в search_phone_full
-
 import re
 import aiohttp
 import phonenumbers
@@ -13,10 +11,7 @@ import random
 from faker import Faker
 from datetime import datetime
 
-# ============================================================
-# НАСТРОЙКИ
-# ============================================================
-
+# ===== НАСТРОЙКИ =====
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
     "Accept": "application/json, text/plain, */*",
@@ -32,9 +27,6 @@ vk_session = vk_api.VkApi(token=VK_TOKEN)
 vk = vk_session.get_api()
 fake = Faker()
 
-# ============================================================
-# ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
-# ============================================================
 
 def normalize_phone(phone: str):
     raw = phone.replace('+', '').replace(' ', '').replace('-', '').replace('(', '').replace(')', '')
@@ -50,111 +42,8 @@ def normalize_phone(phone: str):
         return '7' + raw, "RU", True
     return raw, None, False
 
-def search_in_mts_file(phone_clean: str) -> dict:
-    result = {}
-    if not os.path.exists("MTS.txt"):
-        return result
-    try:
-        with open("MTS.txt", "r", encoding="utf-8") as f:
-            for line in f:
-                line = line.strip()
-                if not line:
-                    continue
-                if phone_clean in line or phone_clean[-7:] in line:
-                    parts = line.split(';')
-                    if len(parts) >= 1:
-                        result["Номер в базе"] = parts[0]
-                    if len(parts) >= 2:
-                        result["ФИО (МТС)"] = parts[1]
-                    if len(parts) >= 3:
-                        result["Доп. информация"] = parts[2]
-                    if len(parts) >= 4:
-                        result["Адрес"] = parts[3]
-                    break
-    except:
-        pass
-    return result
-
-
-# ============================================================
-# 1. ПОИСК ПО РФ БАЗЕ (saverudata)
-# ============================================================
-
-async def search_russian_db(phone: str) -> dict:
-    """Поиск по российской базе saverudata"""
-    clean = ''.join(filter(str.isdigit, phone))
-    if not clean:
-        return {"Ошибка": "Введите номер телефона"}
-    
-    if len(clean) < 10:
-        return {"Ошибка": "Слишком короткий номер"}
-    
-    prefix = clean[:6]
-    digits = '/'.join(prefix)
-    target_url = f"https://saverudata.org/db/{digits}/00000-99999.json"
-    cdx_url = f"https://web.archive.org/cdx/search/cdx?url={target_url}&output=json&fl=timestamp,original,mimetype,statuscode,digest,length"
-    
-    async with aiohttp.ClientSession() as session:
-        try:
-            async with session.get(cdx_url) as response:
-                if response.status != 200:
-                    return {}
-                
-                data = await response.json()
-                if len(data) <= 1:
-                    return {}
-                
-                latest = data[-1]
-                timestamp = latest[0]
-                url = latest[1]
-                download_url = f"https://web.archive.org/web/{timestamp}/{url}"
-                
-                async with session.get(download_url) as json_response:
-                    if json_response.status != 200:
-                        return {}
-                    
-                    json_data = await json_response.json()
-                    search_phone = clean
-                    found_records = []
-                    
-                    for item in json_data:
-                        if len(item) > 0:
-                            phone_in_json = ''.join(filter(str.isdigit, item[0]))
-                            if phone_in_json == search_phone:
-                                record = {
-                                    "Телефон": item[0] if len(item) > 0 else None,
-                                    "Город": item[1] if len(item) > 1 and item[1] else None,
-                                    "Улица": item[2] if len(item) > 2 and item[2] else None,
-                                    "Дом": item[3] if len(item) > 3 and item[3] else None,
-                                    "Подъезд": item[4] if len(item) > 4 and item[4] else None,
-                                    "Этаж": item[5] if len(item) > 5 and item[5] else None,
-                                    "Квартира": item[6] if len(item) > 6 and item[6] else None,
-                                    "Имя": item[7] if len(item) > 7 and item[7] else None,
-                                    "Email": item[8] if len(item) > 8 and item[8] else None,
-                                    "Короткое имя": item[9] if len(item) > 9 and item[9] else None,
-                                    "Дополнительно": item[10] if len(item) > 10 and item[10] else None,
-                                }
-                                record = {k: v for k, v in record.items() if v}
-                                if record:
-                                    found_records.append(record)
-                    
-                    if found_records:
-                        return {
-                            "✅ Найдено записей (saverudata)": len(found_records),
-                            "📋 Записи": found_records
-                        }
-                    return {}
-                        
-        except Exception as e:
-            return {"Ошибка saverudata": str(e)}
-
-
-# ============================================================
-# 2. ПОИСК ПО НОМЕРУ (ПОЛНЫЙ - С ВСЕМИ БАЗАМИ)
-# ============================================================
 
 async def search_phone_full(phone: str) -> dict:
-    """ПОЛНЫЙ поиск по номеру телефона (ВСЕ БАЗЫ)"""
     phone_clean, region, ok = normalize_phone(phone)
     if not ok:
         return {"Ошибка": "Неверный формат номера. Примеры: +375331234567, +79123456789"}
@@ -162,7 +51,6 @@ async def search_phone_full(phone: str) -> dict:
     result = {"📱 Телефон": phone}
     data_found = False
     
-    # ===== 1. Базовая информация =====
     try:
         parsed = phonenumbers.parse(phone_clean, region)
         result["✅ Валидный"] = "Да" if phonenumbers.is_valid_number(parsed) else "Нет"
@@ -174,7 +62,7 @@ async def search_phone_full(phone: str) -> dict:
         pass
     
     async with aiohttp.ClientSession() as session:
-        # ===== 2. МТС =====
+        # МТС (Беларусь)
         try:
             link = f'https://spravochnik109.link/byelarus/mobilnaya-svyaz/mTS-mobilnyj-opyerator/mTS-mobilnyye-tyelyefony?phone={phone_clean[-7:]}'
             async with session.get(link, headers=HEADERS) as resp:
@@ -192,7 +80,7 @@ async def search_phone_full(phone: str) -> dict:
         except:
             pass
         
-        # ===== 3. Велком =====
+        # Велком (Беларусь)
         try:
             link = f'https://spravochnik109.link/byelarus/mobilnaya-svyaz/vyelkom-mobilnyj-opyerator/vyelkom-mobilnyye-tyelyefony?phone=%2B{phone_clean}'
             async with session.get(link, headers=HEADERS) as resp:
@@ -213,13 +101,7 @@ async def search_phone_full(phone: str) -> dict:
         except:
             pass
         
-        # ===== 4. MTS.txt =====
-        mts_file = search_in_mts_file(phone_clean)
-        for k, v in mts_file.items():
-            result[k] = v
-            data_found = True
-        
-        # ===== 5. GetScam (РФ) =====
+        # GetScam (РФ)
         if phone_clean.startswith('7'):
             try:
                 url = f'https://getscam.com/{phone_clean}'
@@ -245,24 +127,8 @@ async def search_phone_full(phone: str) -> dict:
                             data_found = True
             except:
                 pass
-            
-            # ===== 6. Saverudata (РФ база) =====
-            try:
-                saveresult = await search_russian_db(phone_clean)
-                for k, v in saveresult.items():
-                    if k == "📋 Записи":
-                        # Добавляем записи с префиксом
-                        for i, record in enumerate(v, 1):
-                            for rk, rv in record.items():
-                                result[f"📋 Saverudata #{i} {rk}"] = rv
-                                data_found = True
-                    elif k != "Ошибка saverudata":
-                        result[k] = v
-                        data_found = True
-            except:
-                pass
     
-    # ===== 7. Соцсети =====
+    # Соцсети
     result["✈️ Telegram"] = f"https://t.me/+{phone_clean}"
     result["📱 WhatsApp"] = f"https://wa.me/{phone_clean}"
     result["📞 Viber"] = f"https://viber.click/{phone_clean}"
@@ -272,10 +138,6 @@ async def search_phone_full(phone: str) -> dict:
     
     return result
 
-
-# ============================================================
-# 3. ПОИСК ПО ИНН
-# ============================================================
 
 async def search_inn(inn_text: str) -> dict:
     if not inn_text:
@@ -318,20 +180,11 @@ async def search_inn(inn_text: str) -> dict:
                                 result["🏷️ КПП"] = str(item['kpp'])
                             if item.get('ogrn'):
                                 result["🔑 ОГРН"] = str(item['ogrn'])
-                            if item.get('state'):
-                                status_map = {'ACTIVE': 'Действующее', 'LIQUIDATED': 'Ликвидировано'}
-                                status = item['state'].get('status') if isinstance(item['state'], dict) else None
-                                if status:
-                                    result["⚡ Статус"] = status_map.get(status, status)
         except:
             pass
     
     return result
 
-
-# ============================================================
-# 4. ПОИСК ПО EMAIL
-# ============================================================
 
 async def search_email(email: str) -> dict:
     if not email:
@@ -380,10 +233,6 @@ async def search_email(email: str) -> dict:
     return result
 
 
-# ============================================================
-# 5. ПОИСК ПО VK ID
-# ============================================================
-
 async def search_vk(vk_id: str) -> dict:
     result = {"📘 VK ID": vk_id}
     try:
@@ -407,10 +256,6 @@ async def search_vk(vk_id: str) -> dict:
     return result
 
 
-# ============================================================
-# 6. ПОИСК ПО IP
-# ============================================================
-
 async def search_ip(ip: str) -> dict:
     result = {"🌐 IP": ip}
     try:
@@ -430,10 +275,6 @@ async def search_ip(ip: str) -> dict:
         result["❌ Ошибка"] = str(e)
     return result
 
-
-# ============================================================
-# 7. WHOIS ПОИСК
-# ============================================================
 
 async def search_whois(domain: str) -> dict:
     result = {"🌐 Домен": domain}
