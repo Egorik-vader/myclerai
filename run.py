@@ -1,23 +1,11 @@
-# run.py - Бот + Красивый сайт в стиле карточек
-import aiogram
-import logging
-from aiogram import Bot, Dispatcher
 import asyncio
 import os
 import aiohttp
-import re
-
-try:
-    aiohttp.resolver.DefaultResolver = aiohttp.resolver.ThreadedResolver
-except:
-    pass
-
 from aiohttp import web
 from config import TOKEN
-from app.handlers import router
 
 # ============================================================
-# HTML СТРАНИЦА - КАРТОЧКИ + КОПИРОВАНИЕ
+# HTML СТРАНИЦА
 # ============================================================
 
 HTML_PAGE = '''<!DOCTYPE html>
@@ -28,7 +16,6 @@ HTML_PAGE = '''<!DOCTYPE html>
     <title>Wekness Tool — OSINT</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
             background: #0a0a12;
@@ -37,7 +24,6 @@ HTML_PAGE = '''<!DOCTYPE html>
             line-height: 1.6;
             min-height: 100vh;
         }
-        
         body::before {
             content: '';
             position: fixed;
@@ -49,13 +35,9 @@ HTML_PAGE = '''<!DOCTYPE html>
             pointer-events: none;
             z-index: -1;
         }
-        
-        .container {
-            max-width: 860px;
-            margin: 0 auto;
-        }
-        
-        /* ===== HEADER ===== */
+        .container { max-width: 860px; margin: 0 auto; }
+
+        /* HEADER */
         .header {
             background: linear-gradient(135deg, rgba(20, 20, 40, 0.92), rgba(40, 20, 80, 0.6));
             backdrop-filter: blur(20px);
@@ -67,7 +49,6 @@ HTML_PAGE = '''<!DOCTYPE html>
             position: relative;
             overflow: hidden;
         }
-        
         .header::before {
             content: '';
             position: absolute;
@@ -78,7 +59,6 @@ HTML_PAGE = '''<!DOCTYPE html>
             background: radial-gradient(circle, rgba(124, 58, 237, 0.08), transparent 70%);
             pointer-events: none;
         }
-        
         .header-logo {
             display: flex;
             align-items: center;
@@ -88,7 +68,6 @@ HTML_PAGE = '''<!DOCTYPE html>
             position: relative;
             z-index: 1;
         }
-        
         .header-logo img {
             width: 64px;
             height: 64px;
@@ -97,26 +76,22 @@ HTML_PAGE = '''<!DOCTYPE html>
             box-shadow: 0 4px 20px rgba(124, 58, 237, 0.15);
             object-fit: cover;
         }
-        
         .header-logo .logo-text {
             font-size: 32px;
             font-weight: 800;
             letter-spacing: -0.5px;
         }
-        
         .header-logo .logo-text span {
             background: linear-gradient(135deg, #a78bfa, #7c3aed);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
         }
-        
         .header .sub {
             color: rgba(255,255,255,0.3);
             font-size: 14px;
             position: relative;
             z-index: 1;
         }
-        
         .header .query-box {
             display: inline-block;
             margin-top: 12px;
@@ -130,7 +105,6 @@ HTML_PAGE = '''<!DOCTYPE html>
             position: relative;
             z-index: 1;
         }
-        
         .support-links {
             display: flex;
             justify-content: center;
@@ -140,7 +114,6 @@ HTML_PAGE = '''<!DOCTYPE html>
             z-index: 1;
             flex-wrap: wrap;
         }
-        
         .support-btn {
             display: inline-flex;
             align-items: center;
@@ -153,28 +126,123 @@ HTML_PAGE = '''<!DOCTYPE html>
             font-weight: 600;
             transition: 0.3s;
         }
-        
         .support-btn.boosty {
             background: linear-gradient(135deg, #f59e0b, #d97706);
             box-shadow: 0 4px 20px rgba(245, 158, 11, 0.15);
         }
-        
         .support-btn.boosty:hover {
             transform: translateY(-2px);
             box-shadow: 0 8px 30px rgba(245, 158, 11, 0.25);
         }
-        
         .support-btn.donate-alerts {
             background: linear-gradient(135deg, #7c3aed, #6d28d9);
             box-shadow: 0 4px 20px rgba(124, 58, 237, 0.15);
         }
-        
         .support-btn.donate-alerts:hover {
             transform: translateY(-2px);
             box-shadow: 0 8px 30px rgba(124, 58, 237, 0.25);
         }
-        
-        /* ===== STATS ===== */
+
+        /* SEARCH */
+        .search-box {
+            background: rgba(255,255,255,0.02);
+            border-radius: 24px;
+            padding: 24px 28px;
+            margin-bottom: 24px;
+            border: 1px solid rgba(255,255,255,0.04);
+            backdrop-filter: blur(10px);
+        }
+        .search-type {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+        .search-type button {
+            padding: 12px 8px;
+            border: 2px solid rgba(255,255,255,0.04);
+            background: rgba(10, 10, 18, 0.6);
+            color: rgba(255,255,255,0.4);
+            border-radius: 12px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            letter-spacing: 0.3px;
+        }
+        .search-type button:hover {
+            border-color: rgba(124, 58, 237, 0.3);
+            color: rgba(255,255,255,0.7);
+            transform: translateY(-1px);
+        }
+        .search-type button.active {
+            border-color: #7c3aed;
+            color: #a78bfa;
+            background: rgba(124, 58, 237, 0.08);
+            box-shadow: 0 0 30px rgba(124, 58, 237, 0.05);
+        }
+        .search-type button .icon { margin-right: 6px; }
+        .search-input {
+            display: flex;
+            gap: 12px;
+        }
+        .search-input input {
+            flex: 1;
+            padding: 16px 20px;
+            border-radius: 14px;
+            border: 2px solid rgba(255,255,255,0.04);
+            background: rgba(10, 10, 18, 0.6);
+            color: #e8e8e8;
+            font-size: 16px;
+            outline: none;
+            transition: all 0.3s;
+        }
+        .search-input input:focus {
+            border-color: #7c3aed;
+            box-shadow: 0 0 30px rgba(124, 58, 237, 0.05);
+        }
+        .search-input input::placeholder { color: rgba(255,255,255,0.15); }
+        .search-input input.error { border-color: #f87171; }
+        .search-input input.success { border-color: #34d399; }
+        .search-input button {
+            padding: 16px 40px;
+            border: none;
+            border-radius: 14px;
+            background: linear-gradient(135deg, #7c3aed, #6d28d9);
+            color: #fff;
+            font-size: 16px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s;
+            letter-spacing: 0.5px;
+            white-space: nowrap;
+        }
+        .search-input button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 30px rgba(124, 58, 237, 0.3);
+        }
+        .search-input button:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+        .validation-msg {
+            margin-top: 12px;
+            font-size: 13px;
+            padding: 8px 16px;
+            border-radius: 8px;
+            display: none;
+        }
+        .validation-msg.error {
+            display: block;
+            color: #f87171;
+            background: rgba(248, 113, 113, 0.06);
+            border: 1px solid rgba(248, 113, 113, 0.1);
+        }
+        .validation-msg.success {
+            display: block;
+            color: #34d399;
+            background: rgba(52, 211, 153, 0.04);
+            border: 1px solid rgba(52, 211, 153, 0.06);
+        }
+
+        /* STATS */
         .stats {
             display: flex;
             justify-content: space-around;
@@ -182,7 +250,6 @@ HTML_PAGE = '''<!DOCTYPE html>
             margin-bottom: 24px;
             flex-wrap: wrap;
         }
-        
         .stats .stat-card {
             background: rgba(255,255,255,0.02);
             border-radius: 16px;
@@ -193,12 +260,10 @@ HTML_PAGE = '''<!DOCTYPE html>
             flex: 1;
             min-width: 100px;
         }
-        
         .stats .stat-card:hover {
             border-color: rgba(124, 58, 237, 0.08);
             background: rgba(255,255,255,0.04);
         }
-        
         .stats .stat-number {
             font-size: 28px;
             font-weight: 800;
@@ -206,14 +271,13 @@ HTML_PAGE = '''<!DOCTYPE html>
             display: block;
             letter-spacing: -0.5px;
         }
-        
         .stats .stat-label {
             font-size: 12px;
             color: rgba(255,255,255,0.3);
             font-weight: 400;
         }
-        
-        /* ===== CARDS ===== */
+
+        /* CARDS */
         .card {
             background: rgba(255,255,255,0.04);
             border-radius: 24px;
@@ -223,28 +287,23 @@ HTML_PAGE = '''<!DOCTYPE html>
             transition: all 0.3s;
             box-shadow: 0 4px 24px rgba(0,0,0,0.2);
         }
-        
         .card:hover {
             transform: translateY(-3px);
             border-color: rgba(124, 58, 237, 0.15);
             box-shadow: 0 8px 32px rgba(0,0,0,0.3);
         }
-        
         .card-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
             padding: 14px 20px;
             background: rgba(255,255,255,0.02);
-            border-bottom: none;
         }
-        
         .card-number {
             font-weight: 600;
             font-size: 14px;
             color: rgba(255,255,255,0.3);
         }
-        
         .copy-btn {
             background: rgba(255,255,255,0.06);
             border: 1px solid rgba(255,255,255,0.06);
@@ -260,17 +319,14 @@ HTML_PAGE = '''<!DOCTYPE html>
             justify-content: center;
             font-family: inherit;
         }
-        
         .copy-btn:hover {
             background: rgba(124, 58, 237, 0.12);
             border-color: rgba(124, 58, 237, 0.15);
             color: #a78bfa;
         }
-        
         .card-body {
             padding: 8px 20px 18px 20px;
         }
-        
         .field {
             display: flex;
             justify-content: space-between;
@@ -279,18 +335,13 @@ HTML_PAGE = '''<!DOCTYPE html>
             align-items: baseline;
             border-bottom: 1px solid rgba(255,255,255,0.03);
         }
-        
-        .field:last-child {
-            border-bottom: none;
-        }
-        
+        .field:last-child { border-bottom: none; }
         .field-label {
             color: rgba(255,255,255,0.5);
             font-size: 16px;
             white-space: nowrap;
             font-weight: 400;
         }
-        
         .field-value {
             color: #e8e8e8;
             font-size: 17px;
@@ -299,141 +350,19 @@ HTML_PAGE = '''<!DOCTYPE html>
             max-width: 60%;
             font-weight: 500;
         }
-        
         .value-email { color: #a78bfa !important; }
         .value-phone { color: #34d399 !important; }
         .value-ip { color: #fbbf24 !important; }
         .value-status { color: #f87171 !important; font-weight: 600 !important; }
-        .value-risk { color: #fbbf24 !important; }
         .value-name { color: #e8e8e8 !important; font-weight: 600 !important; }
         .value-link { color: #60a5fa !important; text-decoration: none; }
         .value-link:hover { text-decoration: underline; }
-        
-        /* ===== SEARCH BOX ===== */
-        .search-box {
-            background: rgba(255,255,255,0.02);
-            border-radius: 24px;
-            padding: 24px 28px;
-            margin-bottom: 24px;
-            border: 1px solid rgba(255,255,255,0.04);
-            backdrop-filter: blur(10px);
-        }
-        
-        .search-type {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 8px;
-            margin-bottom: 16px;
-        }
-        
-        .search-type button {
-            padding: 12px 8px;
-            border: 2px solid rgba(255,255,255,0.04);
-            background: rgba(10, 10, 18, 0.6);
-            color: rgba(255,255,255,0.4);
-            border-radius: 12px;
-            cursor: pointer;
-            font-size: 13px;
-            font-weight: 600;
-            transition: all 0.3s ease;
-            letter-spacing: 0.3px;
-        }
-        
-        .search-type button:hover {
-            border-color: rgba(124, 58, 237, 0.3);
-            color: rgba(255,255,255,0.7);
-            transform: translateY(-1px);
-        }
-        
-        .search-type button.active {
-            border-color: #7c3aed;
-            color: #a78bfa;
-            background: rgba(124, 58, 237, 0.08);
-            box-shadow: 0 0 30px rgba(124, 58, 237, 0.05);
-        }
-        
-        .search-type button .icon { margin-right: 6px; }
-        
-        .search-input {
-            display: flex;
-            gap: 12px;
-        }
-        
-        .search-input input {
-            flex: 1;
-            padding: 16px 20px;
-            border-radius: 14px;
-            border: 2px solid rgba(255,255,255,0.04);
-            background: rgba(10, 10, 18, 0.6);
-            color: #e8e8e8;
-            font-size: 16px;
-            outline: none;
-            transition: all 0.3s;
-        }
-        
-        .search-input input:focus {
-            border-color: #7c3aed;
-            box-shadow: 0 0 30px rgba(124, 58, 237, 0.05);
-        }
-        
-        .search-input input::placeholder { color: rgba(255,255,255,0.15); }
-        .search-input input.error { border-color: #f87171; }
-        .search-input input.success { border-color: #34d399; }
-        
-        .search-input button {
-            padding: 16px 40px;
-            border: none;
-            border-radius: 14px;
-            background: linear-gradient(135deg, #7c3aed, #6d28d9);
-            color: #fff;
-            font-size: 16px;
-            font-weight: 700;
-            cursor: pointer;
-            transition: all 0.3s;
-            letter-spacing: 0.5px;
-            white-space: nowrap;
-        }
-        
-        .search-input button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 30px rgba(124, 58, 237, 0.3);
-        }
-        
-        .search-input button:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-            transform: none;
-        }
-        
-        .validation-msg {
-            margin-top: 12px;
-            font-size: 13px;
-            padding: 8px 16px;
-            border-radius: 8px;
-            display: none;
-        }
-        
-        .validation-msg.error {
-            display: block;
-            color: #f87171;
-            background: rgba(248, 113, 113, 0.06);
-            border: 1px solid rgba(248, 113, 113, 0.1);
-        }
-        
-        .validation-msg.success {
-            display: block;
-            color: #34d399;
-            background: rgba(52, 211, 153, 0.04);
-            border: 1px solid rgba(52, 211, 153, 0.06);
-        }
-        
-        /* ===== LOADING ===== */
+
         .loading {
             text-align: center;
             padding: 60px 20px;
             color: rgba(255,255,255,0.2);
         }
-        
         .loading .spinner {
             width: 40px;
             height: 40px;
@@ -443,10 +372,9 @@ HTML_PAGE = '''<!DOCTYPE html>
             animation: spin 0.8s linear infinite;
             margin: 0 auto 20px;
         }
-        
         @keyframes spin { to { transform: rotate(360deg); } }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        
+
         .error {
             background: rgba(248, 113, 113, 0.06);
             border: 1px solid rgba(248, 113, 113, 0.1);
@@ -455,14 +383,12 @@ HTML_PAGE = '''<!DOCTYPE html>
             border-radius: 16px;
             margin-top: 20px;
         }
-        
         .no-results {
             text-align: center;
             color: rgba(255,255,255,0.15);
             padding: 60px 20px;
             font-size: 16px;
         }
-        
         #resultCount {
             background: rgba(255,255,255,0.02);
             border-radius: 12px;
@@ -473,8 +399,7 @@ HTML_PAGE = '''<!DOCTYPE html>
             border: 1px solid rgba(255,255,255,0.03);
             display: none;
         }
-        
-        /* ===== TOAST ===== */
+
         .toast {
             position: fixed;
             bottom: 30px;
@@ -497,18 +422,9 @@ HTML_PAGE = '''<!DOCTYPE html>
             align-items: center;
             gap: 10px;
         }
-        
-        .toast.show {
-            opacity: 1;
-            transform: translateX(-50%) translateY(0);
-            pointer-events: auto;
-        }
-        
-        .toast.error {
-            border-color: rgba(248, 113, 113, 0.15);
-        }
-        
-        /* ===== FOOTER ===== */
+        .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); pointer-events: auto; }
+        .toast.error { border-color: rgba(248, 113, 113, 0.15); }
+
         .footer {
             text-align: center;
             margin-top: 28px;
@@ -517,30 +433,19 @@ HTML_PAGE = '''<!DOCTYPE html>
             color: rgba(255,255,255,0.08);
             font-size: 12px;
         }
-        
-        .footer a {
-            color: rgba(255,255,255,0.1);
-            text-decoration: none;
-            transition: 0.2s;
-        }
-        
+        .footer a { color: rgba(255,255,255,0.1); text-decoration: none; transition: 0.2s; }
         .footer a:hover { color: #a78bfa; }
-        
-        /* ===== RESPONSIVE ===== */
+
         @media (max-width: 768px) {
             body { padding: 12px; }
-            
             .header { padding: 20px 16px; }
             .header-logo .logo-text { font-size: 24px; }
             .header-logo img { width: 48px; height: 48px; }
             .header .query-box { font-size: 13px; padding: 6px 18px; }
-            
             .search-type { grid-template-columns: repeat(2, 1fr); }
-            
             .stats { flex-direction: column; gap: 8px; }
             .stats .stat-card { padding: 12px 16px; }
             .stats .stat-number { font-size: 22px; }
-            
             .card-body { padding: 8px 16px 14px 16px; }
             .field {
                 flex-direction: column;
@@ -555,49 +460,37 @@ HTML_PAGE = '''<!DOCTYPE html>
                 font-size: 16px;
             }
             .field-label { font-size: 15px; }
-            
             .search-input { flex-direction: column; }
             .search-input button { padding: 14px; }
-            
             .support-links { flex-direction: column; align-items: center; }
             .support-btn { width: 100%; justify-content: center; }
-            
             .copy-btn { width: 28px; height: 28px; font-size: 14px; }
-            
             .toast { font-size: 13px; padding: 12px 20px; }
         }
-        
         @media (max-width: 480px) {
             body { padding: 8px; }
             .header { padding: 16px 12px; border-radius: 16px; }
             .header-logo .logo-text { font-size: 20px; }
             .header-logo img { width: 40px; height: 40px; }
             .header .query-box { font-size: 11px; padding: 4px 14px; }
-            
             .search-box { padding: 16px 16px; }
             .search-type { grid-template-columns: repeat(2, 1fr); }
-            
             .stats .stat-card { padding: 10px 12px; }
             .stats .stat-number { font-size: 18px; }
-            
             .card { border-radius: 18px; }
             .card-header { padding: 10px 14px; }
             .card-body { padding: 6px 14px 12px 14px; }
-            
             .field { padding: 6px 0; }
             .field-value { font-size: 15px; }
             .field-label { font-size: 14px; }
-            
             .copy-btn { width: 24px; height: 24px; font-size: 12px; }
             .support-btn { font-size: 12px; padding: 6px 16px; }
-            
             .toast { font-size: 12px; padding: 10px 16px; bottom: 16px; }
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <!-- HEADER -->
         <div class="header">
             <div class="header-logo">
                 <img src="https://storage.ghost.io/c/b5/22/b52265eb-d44c-4ae8-8456-954cfb01f918/content/images/2020/07/OffensiveOsint-logo-RGB-2.png" alt="Wekness Tool" onerror="this.style.display='none'">
@@ -611,7 +504,6 @@ HTML_PAGE = '''<!DOCTYPE html>
             </div>
         </div>
         
-        <!-- SEARCH -->
         <div class="search-box">
             <div class="search-type" id="searchType">
                 <button class="active" data-type="phone"><span class="icon">📲</span> Телефон</button>
@@ -630,7 +522,6 @@ HTML_PAGE = '''<!DOCTYPE html>
             <div class="validation-msg" id="validationMsg"></div>
         </div>
         
-        <!-- RESULTS -->
         <div id="resultCount"></div>
         <div class="results" id="resultsContainer">
             <div class="loading">
@@ -639,20 +530,17 @@ HTML_PAGE = '''<!DOCTYPE html>
             </div>
         </div>
         
-        <!-- FOOTER -->
         <div class="footer">
             ⚡ Wekness Tool • Данные из открытых источников
         </div>
     </div>
     
-    <!-- TOAST -->
     <div class="toast" id="toast">
         <span id="toastIcon">✅</span>
         <span id="toastMessage">Скопировано</span>
     </div>
     
     <script>
-        // ===== VARIABLES =====
         const searchType = document.getElementById('searchType');
         const queryInput = document.getElementById('queryInput');
         const searchBtn = document.getElementById('searchBtn');
@@ -681,27 +569,20 @@ HTML_PAGE = '''<!DOCTYPE html>
             whois: '🌍 WHOIS'
         };
 
-        // ===== VALIDATE PHONE =====
         function validatePhone(phone) {
             const clean = phone.replace(/[^\d+]/g, '');
             if (!clean) return { valid: false, msg: '❌ Введите номер телефона' };
-            
             let num = clean;
             if (num.startsWith('+')) num = num.slice(1);
-            
             const ruPattern = /^(7|8)\d{10}$/;
             const byPattern = /^375\d{9}$/;
-            
             if (ruPattern.test(num)) return { valid: true, msg: '✅ Российский номер' };
             if (byPattern.test(num)) return { valid: true, msg: '✅ Белорусский номер' };
-            
             if (num.length < 10) return { valid: false, msg: '❌ Слишком короткий номер' };
             if (num.length > 12) return { valid: false, msg: '❌ Слишком длинный номер' };
-            
             return { valid: false, msg: '❌ Неверный формат. Используйте РФ (7/8...) или РБ (375...)' };
         }
 
-        // ===== TYPE SELECT =====
         searchType.addEventListener('click', (e) => {
             const btn = e.target.closest('button');
             if (!btn) return;
@@ -716,7 +597,6 @@ HTML_PAGE = '''<!DOCTYPE html>
             queryInput.focus();
         });
 
-        // ===== INPUT VALIDATION =====
         queryInput.addEventListener('input', () => {
             if (currentType === 'phone') {
                 const result = validatePhone(queryInput.value);
@@ -738,41 +618,34 @@ HTML_PAGE = '''<!DOCTYPE html>
             }
         });
 
-        // ===== TOAST =====
         function showToast(msg, isError) {
             const toast = document.getElementById('toast');
             const toastMsg = document.getElementById('toastMessage');
             const toastIcon = document.getElementById('toastIcon');
-            
             toastMsg.textContent = msg;
             toastIcon.textContent = isError ? '❌' : '✅';
             toast.className = 'toast' + (isError ? ' error' : '');
-            
             toast.classList.add('show');
             clearTimeout(toast._timeout);
             toast._timeout = setTimeout(() => toast.classList.remove('show'), 3500);
         }
 
-        // ===== COPY =====
         function copyCard(index) {
             const card = document.getElementById('card-' + index);
             if (!card) return;
-            
             let text = '';
             const fields = card.querySelectorAll('.field');
             fields.forEach((field) => {
                 const label = field.querySelector('.field-label')?.textContent?.trim() || '';
                 const value = field.querySelector('.field-value')?.textContent?.trim() || '';
                 if (value) {
-                    text += label + ': ' + value + '\n';
+                    text += label + ': ' + value + '\\n';
                 }
             });
-            
             if (!text) {
                 showToast('Нет данных для копирования', true);
                 return;
             }
-            
             navigator.clipboard.writeText(text).then(() => {
                 showToast('✅ Данные скопированы');
             }).catch(() => {
@@ -780,7 +653,12 @@ HTML_PAGE = '''<!DOCTYPE html>
             });
         }
 
-        // ===== SEARCH =====
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
         async function performSearch() {
             const query = queryInput.value.trim();
             if (!query) {
@@ -824,10 +702,8 @@ HTML_PAGE = '''<!DOCTYPE html>
                     resultCount.style.display = 'block';
                     
                     let html = '';
-                    let totalFields = 0;
                     records.forEach((record, index) => {
                         const entries = Object.entries(record).filter(([k, v]) => v && String(v).trim());
-                        totalFields += entries.length;
                         
                         let fieldsHtml = '';
                         entries.forEach(([key, value]) => {
@@ -873,9 +749,8 @@ HTML_PAGE = '''<!DOCTYPE html>
                 resultCount.textContent = `🔍 Найдено записей: ${entries.length}`;
                 resultCount.style.display = 'block';
                 
-                let html = '';
                 let fieldsHtml = '';
-                entries.forEach(([key, value], idx) => {
+                entries.forEach(([key, value]) => {
                     let cls = '';
                     const val = String(value);
                     if (key.includes('Email')) cls = 'value-email';
@@ -901,7 +776,7 @@ HTML_PAGE = '''<!DOCTYPE html>
                     }
                 });
                 
-                html = `
+                const html = `
                     <div class="card" id="card-0">
                         <div class="card-header">
                             <span class="card-number">📋 Результаты поиска</span>
@@ -920,26 +795,16 @@ HTML_PAGE = '''<!DOCTYPE html>
             }
         }
 
-        // ===== ESCAPE HTML =====
-        function escapeHtml(text) {
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
-        }
-
-        // ===== EVENTS =====
         searchBtn.addEventListener('click', performSearch);
         queryInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') performSearch(); });
         queryInput.focus();
-        
-        // Устанавливаем начальный query display
         queryDisplay.textContent = '📌 Телефон';
     </script>
 </body>
 </html>'''
 
 # ============================================================
-# ОБРАБОТЧИКИ ВЕБ-ЗАПРОСОВ
+# ОБРАБОТЧИКИ
 # ============================================================
 
 async def handle(request):
@@ -984,6 +849,10 @@ async def handle_search(request):
     except Exception as e:
         return web.json_response({'error': str(e)})
 
+# ============================================================
+# ЗАПУСК
+# ============================================================
+
 async def start_web_server():
     app = web.Application()
     app.router.add_get("/", handle)
@@ -998,20 +867,8 @@ async def start_web_server():
     print(f"🌐 Wekness Tool запущен на порту {port}")
     print(f"🔗 Открой: http://localhost:{port}")
 
-# ============================================================
-# БОТ
-# ============================================================
-
-bot = Bot(token=TOKEN)
-dp = Dispatcher()
-dp.include_router(router)
-
-async def main():
-    await start_web_server()
-    await dp.start_polling(bot)
-
 if __name__ == "__main__":
     try:
-        asyncio.run(main())
+        asyncio.run(start_web_server())
     except KeyboardInterrupt:
         print("⏹️ Выход...")
