@@ -1,5 +1,4 @@
-# osint_functions.py - Добавляем saverudata в search_phone_full
-
+# osint_functions.py - РБ поиск есть, MTS.txt убран
 import re
 import aiohttp
 import phonenumbers
@@ -49,31 +48,6 @@ def normalize_phone(phone: str):
     if len(raw) == 10 and raw.isdigit():
         return '7' + raw, "RU", True
     return raw, None, False
-
-def search_in_mts_file(phone_clean: str) -> dict:
-    result = {}
-    if not os.path.exists("MTS.txt"):
-        return result
-    try:
-        with open("MTS.txt", "r", encoding="utf-8") as f:
-            for line in f:
-                line = line.strip()
-                if not line:
-                    continue
-                if phone_clean in line or phone_clean[-7:] in line:
-                    parts = line.split(';')
-                    if len(parts) >= 1:
-                        result["Номер в базе"] = parts[0]
-                    if len(parts) >= 2:
-                        result["ФИО (МТС)"] = parts[1]
-                    if len(parts) >= 3:
-                        result["Доп. информация"] = parts[2]
-                    if len(parts) >= 4:
-                        result["Адрес"] = parts[3]
-                    break
-    except:
-        pass
-    return result
 
 
 # ============================================================
@@ -150,11 +124,11 @@ async def search_russian_db(phone: str) -> dict:
 
 
 # ============================================================
-# 2. ПОИСК ПО НОМЕРУ (ПОЛНЫЙ - С ВСЕМИ БАЗАМИ)
+# 2. ПОИСК ПО НОМЕРУ (РФ + РБ)
 # ============================================================
 
 async def search_phone_full(phone: str) -> dict:
-    """ПОЛНЫЙ поиск по номеру телефона (ВСЕ БАЗЫ)"""
+    """ПОЛНЫЙ поиск по номеру телефона (РФ + РБ)"""
     phone_clean, region, ok = normalize_phone(phone)
     if not ok:
         return {"Ошибка": "Неверный формат номера. Примеры: +375331234567, +79123456789"}
@@ -162,7 +136,7 @@ async def search_phone_full(phone: str) -> dict:
     result = {"📱 Телефон": phone}
     data_found = False
     
-    # ===== 1. Базовая информация =====
+    # Базовая информация
     try:
         parsed = phonenumbers.parse(phone_clean, region)
         result["✅ Валидный"] = "Да" if phonenumbers.is_valid_number(parsed) else "Нет"
@@ -174,52 +148,47 @@ async def search_phone_full(phone: str) -> dict:
         pass
     
     async with aiohttp.ClientSession() as session:
-        # ===== 2. МТС =====
-        try:
-            link = f'https://spravochnik109.link/byelarus/mobilnaya-svyaz/mTS-mobilnyj-opyerator/mTS-mobilnyye-tyelyefony?phone={phone_clean[-7:]}'
-            async with session.get(link, headers=HEADERS) as resp:
-                if resp.status == 200:
-                    html = await resp.text()
-                    soup = BeautifulSoup(html, 'html.parser')
-                    fio_elem = soup.find('td', class_='fio')
-                    if fio_elem:
-                        result["👤 ФИО (МТС)"] = fio_elem.text.strip()
-                        data_found = True
-                    addr_elem = soup.find('td', class_='adr')
-                    if addr_elem:
-                        result["📍 Адрес (МТС)"] = addr_elem.text.strip()
-                        data_found = True
-        except:
-            pass
-        
-        # ===== 3. Велком =====
-        try:
-            link = f'https://spravochnik109.link/byelarus/mobilnaya-svyaz/vyelkom-mobilnyj-opyerator/vyelkom-mobilnyye-tyelyefony?phone=%2B{phone_clean}'
-            async with session.get(link, headers=HEADERS) as resp:
-                if resp.status == 200:
-                    html = await resp.text()
-                    soup = BeautifulSoup(html, 'html.parser')
-                    addr = soup.find('td', class_='adr')
-                    if addr:
-                        result["📍 Адрес (Велком)"] = addr.text.strip()
-                        data_found = True
-                    fio_elem = soup.find(class_='res')
-                    if fio_elem:
-                        fio_text = fio_elem.text.replace("Телефоны", "").strip()
-                        name_user = re.sub(r'[^\w\s]+|[\d]+', r'', fio_text)
-                        if name_user:
-                            result["👤 ФИО (Велком)"] = name_user.replace(' XXX', '').strip()
+        # ===== РЕСПУБЛИКА БЕЛАРУСЬ (МТС) =====
+        if phone_clean.startswith('375'):
+            try:
+                link = f'https://spravochnik109.link/byelarus/mobilnaya-svyaz/mTS-mobilnyj-opyerator/mTS-mobilnyye-tyelyefony?phone={phone_clean[-7:]}'
+                async with session.get(link, headers=HEADERS) as resp:
+                    if resp.status == 200:
+                        html = await resp.text()
+                        soup = BeautifulSoup(html, 'html.parser')
+                        fio_elem = soup.find('td', class_='fio')
+                        if fio_elem:
+                            result["👤 ФИО (МТС)"] = fio_elem.text.strip()
                             data_found = True
-        except:
-            pass
+                        addr_elem = soup.find('td', class_='adr')
+                        if addr_elem:
+                            result["📍 Адрес (МТС)"] = addr_elem.text.strip()
+                            data_found = True
+            except:
+                pass
+            
+            # ===== РЕСПУБЛИКА БЕЛАРУСЬ (Велком) =====
+            try:
+                link = f'https://spravochnik109.link/byelarus/mobilnaya-svyaz/vyelkom-mobilnyj-opyerator/vyelkom-mobilnyye-tyelyefony?phone=%2B{phone_clean}'
+                async with session.get(link, headers=HEADERS) as resp:
+                    if resp.status == 200:
+                        html = await resp.text()
+                        soup = BeautifulSoup(html, 'html.parser')
+                        addr = soup.find('td', class_='adr')
+                        if addr:
+                            result["📍 Адрес (Велком)"] = addr.text.strip()
+                            data_found = True
+                        fio_elem = soup.find(class_='res')
+                        if fio_elem:
+                            fio_text = fio_elem.text.replace("Телефоны", "").strip()
+                            name_user = re.sub(r'[^\w\s]+|[\d]+', r'', fio_text)
+                            if name_user:
+                                result["👤 ФИО (Велком)"] = name_user.replace(' XXX', '').strip()
+                                data_found = True
+            except:
+                pass
         
-        # ===== 4. MTS.txt =====
-        mts_file = search_in_mts_file(phone_clean)
-        for k, v in mts_file.items():
-            result[k] = v
-            data_found = True
-        
-        # ===== 5. GetScam (РФ) =====
+        # ===== РОССИЙСКАЯ ФЕДЕРАЦИЯ (GetScam) =====
         if phone_clean.startswith('7'):
             try:
                 url = f'https://getscam.com/{phone_clean}'
@@ -246,12 +215,11 @@ async def search_phone_full(phone: str) -> dict:
             except:
                 pass
             
-            # ===== 6. Saverudata (РФ база) =====
+            # ===== РОССИЙСКАЯ ФЕДЕРАЦИЯ (Saverudata) =====
             try:
                 saveresult = await search_russian_db(phone_clean)
                 for k, v in saveresult.items():
                     if k == "📋 Записи":
-                        # Добавляем записи с префиксом
                         for i, record in enumerate(v, 1):
                             for rk, rv in record.items():
                                 result[f"📋 Saverudata #{i} {rk}"] = rv
@@ -262,7 +230,7 @@ async def search_phone_full(phone: str) -> dict:
             except:
                 pass
     
-    # ===== 7. Соцсети =====
+    # Соцсети
     result["✈️ Telegram"] = f"https://t.me/+{phone_clean}"
     result["📱 WhatsApp"] = f"https://wa.me/{phone_clean}"
     result["📞 Viber"] = f"https://viber.click/{phone_clean}"
@@ -318,11 +286,6 @@ async def search_inn(inn_text: str) -> dict:
                                 result["🏷️ КПП"] = str(item['kpp'])
                             if item.get('ogrn'):
                                 result["🔑 ОГРН"] = str(item['ogrn'])
-                            if item.get('state'):
-                                status_map = {'ACTIVE': 'Действующее', 'LIQUIDATED': 'Ликвидировано'}
-                                status = item['state'].get('status') if isinstance(item['state'], dict) else None
-                                if status:
-                                    result["⚡ Статус"] = status_map.get(status, status)
         except:
             pass
     
