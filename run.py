@@ -1,4 +1,4 @@
-# run.py — без разделителей и без упоминания Saverudata
+# run.py — без упоминаний Saverudata
 import asyncio
 import os
 import aiohttp
@@ -7,6 +7,9 @@ from config import TOKEN
 from app.handlers import router
 from aiogram import Bot, Dispatcher
 
+# ============================================================
+# HTML СТРАНИЦА
+# ============================================================
 
 HTML_PAGE = """<!DOCTYPE html>
 <html lang="ru">
@@ -313,7 +316,7 @@ HTML_PAGE = """<!DOCTYPE html>
             font-weight: 400;
         }
         
-        /* CARDS — БЕЗ РАЗДЕЛИТЕЛЕЙ МЕЖДУ ПОЛЯМИ */
+        /* CARDS — без разделителей */
         .card {
             background: rgba(255,255,255,0.04);
             border-radius: 24px;
@@ -367,10 +370,9 @@ HTML_PAGE = """<!DOCTYPE html>
         }
         
         .card-body {
-            padding: 8px 20px 18px 20px;
+            padding: 8px 40px 18px 20px;
         }
         
-        /* УБРАЛИ border-bottom — теперь нет линий */
         .field {
             display: flex;
             justify-content: space-between;
@@ -378,21 +380,25 @@ HTML_PAGE = """<!DOCTYPE html>
             gap: 16px;
             align-items: baseline;
         }
-        
+
         .field-label {
             color: rgba(255,255,255,0.5);
             font-size: 16px;
             white-space: nowrap;
             font-weight: 400;
+            min-width: 100px;
+            flex-shrink: 0;
+            text-align: left;
         }
-        
+
         .field-value {
             color: #e8e8e8;
             font-size: 17px;
-            text-align: right;
             word-break: break-word;
-            max-width: 60%;
             font-weight: 500;
+            text-align: center;
+            flex: 1;
+            padding: 0 8px;
         }
         
         .value-email { color: #a78bfa !important; }
@@ -531,10 +537,10 @@ HTML_PAGE = """<!DOCTYPE html>
         <div class="header">
             <div class="header-logo">
                 <img src="https://storage.ghost.io/c/b5/22/b52265eb-d44c-4ae8-8456-954cfb01f918/content/images/2020/07/OffensiveOsint-logo-RGB-2.png" alt="Wekness Tool" onerror="this.style.display='none'">
-                <div class="logo-text">🔎 <span>Wekness Tool</span></div>
+                <div class="logo-text">🔎<span>Wekness Tool</span></div>
             </div>
             <div class="sub">🔍 Поиск информации в открытых источниках</div>
-            <div class="query-box" id="queryDisplay">📲 Введите запрос</div>
+            <div class="query-box" id="queryDisplay">🚀 Введите запрос</div>
             <div class="support-links">
                 <a href="https://trashbox.ru/topics/216477/wekness-tool" class="support-btn boosty" target="_blank">⬇️ Скачать</a>
                 <a href="https://boosty.to/wekness" class="support-btn donate-alerts" target="_blank">❤️ Поддержать</a>
@@ -756,7 +762,7 @@ HTML_PAGE = """<!DOCTYPE html>
                     return;
                 }
                 
-                // Saverudata записи — убираем упоминание "Saverudata" из названий полей
+                // Saverudata записи — убираем все упоминания "Saverudata"
                 if (data["✅ Найдено записей (saverudata)"] && data["📋 Записи"]) {
                     const records = data["📋 Записи"];
                     const count = data["✅ Найдено записей (saverudata)"];
@@ -773,11 +779,14 @@ HTML_PAGE = """<!DOCTYPE html>
                     
                     let html = '';
                     records.forEach((record, index) => {
-                        // Очищаем ключи от "Saverudata #N"
+                        // Убираем "📋 Saverudata #N " из названий полей полностью
                         let cleanedRecord = {};
                         for (let [key, value] of Object.entries(record)) {
-                            // Убираем "📋 Saverudata #N " из названий полей
-                            let cleanKey = key.replace(/📋 Saverudata #\d+\s*/, '');
+                            let cleanKey = key;
+                            // Убираем "📋 Saverudata #N "
+                            cleanKey = cleanKey.replace(/📋 Saverudata #\d+\s*/, '');
+                            // Убираем "Saverudata #N "
+                            cleanKey = cleanKey.replace(/Saverudata #\d+\s*/, '');
                             cleanedRecord[cleanKey] = value;
                         }
                         const entries = Object.entries(cleanedRecord).filter(([k, v]) => v && String(v).trim());
@@ -882,7 +891,7 @@ HTML_PAGE = """<!DOCTYPE html>
         searchBtn.addEventListener('click', performSearch);
         queryInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') performSearch(); });
         queryInput.focus();
-        queryDisplay.textContent = '📌 Телефон';
+        queryDisplay.textContent = '📲 Телефон';
     </script>
 </body>
 </html>"""
