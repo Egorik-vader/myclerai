@@ -1,4 +1,4 @@
-# run.py — бот + красивый веб-интерфейс с карточками
+# run.py — бот + красивый веб-интерфейс с карточками (без загрузки)
 import asyncio
 import os
 import aiohttp
@@ -7,6 +7,9 @@ from config import TOKEN
 from app.handlers import router
 from aiogram import Bot, Dispatcher
 
+# ============================================================
+# HTML СТРАНИЦА С КРАСИВЫМ ВЫВОДОМ КАРТОЧКАМИ
+# ============================================================
 
 HTML_PAGE = """<!DOCTYPE html>
 <html lang="ru">
@@ -410,24 +413,13 @@ HTML_PAGE = """<!DOCTYPE html>
         .value-link { color: #60a5fa !important; text-decoration: none; }
         .value-link:hover { text-decoration: underline; }
         
-        /* LOADING */
-        .loading {
+        /* LOADING — теперь просто текст, без крутилки */
+        .waiting {
             text-align: center;
             padding: 60px 20px;
-            color: rgba(255,255,255,0.2);
+            color: rgba(255,255,255,0.15);
+            font-size: 16px;
         }
-        
-        .loading .spinner {
-            width: 40px;
-            height: 40px;
-            border: 4px solid rgba(255,255,255,0.04);
-            border-top-color: #7c3aed;
-            border-radius: 50%;
-            animation: spin 0.8s linear infinite;
-            margin: 0 auto 20px;
-        }
-        
-        @keyframes spin { to { transform: rotate(360deg); } }
         
         .error {
             background: rgba(248, 113, 113, 0.06);
@@ -554,7 +546,7 @@ HTML_PAGE = """<!DOCTYPE html>
                 <img src="https://storage.ghost.io/c/b5/22/b52265eb-d44c-4ae8-8456-954cfb01f918/content/images/2020/07/OffensiveOsint-logo-RGB-2.png" alt="Wekness Tool" onerror="this.style.display='none'">
                 <div class="logo-text">🔎 <span>Wekness Tool</span></div>
             </div>
-            <div class="sub">📲 Поиск информации в открытых источниках</div>
+            <div class="sub">🔍 Поиск информации в открытых источниках</div>
             <div class="query-box" id="queryDisplay">🚀 Введите запрос</div>
             <div class="support-links">
                 <a href="https://trashbox.ru/topics/216477/wekness-tool" class="support-btn boosty" target="_blank">⬇️ Скачать</a>
@@ -600,9 +592,8 @@ HTML_PAGE = """<!DOCTYPE html>
         <!-- RESULTS -->
         <div id="resultCount"></div>
         <div class="results" id="resultsContainer">
-            <div class="loading">
-                <div class="spinner"></div>
-                <p>Введите запрос для поиска</p>
+            <div class="waiting">
+                <p>🔍 Введите запрос для поиска</p>
             </div>
         </div>
         
@@ -741,10 +732,16 @@ HTML_PAGE = """<!DOCTYPE html>
             return div.innerHTML;
         }
 
+        function showLoading() {
+            resultsContainer.innerHTML = '<div class="waiting"><p>⏳ Поиск данных...</p></div>';
+            resultCount.style.display = 'none';
+            statsContainer.style.display = 'none';
+        }
+
         async function performSearch() {
             const query = queryInput.value.trim();
             if (!query) {
-                resultsContainer.innerHTML = '<div class="no-results">Введите запрос</div>';
+                resultsContainer.innerHTML = '<div class="waiting"><p>🔍 Введите запрос для поиска</p></div>';
                 resultCount.style.display = 'none';
                 statsContainer.style.display = 'none';
                 return;
@@ -760,9 +757,7 @@ HTML_PAGE = """<!DOCTYPE html>
                 }
             }
             
-            resultsContainer.innerHTML = '<div class="loading"><div class="spinner"></div><p>🔍 Поиск данных...</p></div>';
-            resultCount.style.display = 'none';
-            statsContainer.style.display = 'none';
+            showLoading();
             searchBtn.disabled = true;
             
             try {
@@ -779,7 +774,7 @@ HTML_PAGE = """<!DOCTYPE html>
                     return;
                 }
                 
-                // Проверяем на записи saverudata
+                // Saverudata записи
                 if (data["✅ Найдено записей (saverudata)"] && data["📋 Записи"]) {
                     const records = data["📋 Записи"];
                     const count = data["✅ Найдено записей (saverudata)"];
@@ -925,7 +920,8 @@ async def handle_search(request):
             search_email,
             search_vk,
             search_ip,
-            search_whois
+            search_whois,
+            search_russian_db
         )
         
         if search_type == 'phone':
@@ -963,7 +959,9 @@ async def start_web_server():
     print(f"🌐 Wekness Tool запущен на порту {port}")
     print(f"🔗 Открой: http://localhost:{port}")
 
-
+# ============================================================
+# БОТ
+# ============================================================
 
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
