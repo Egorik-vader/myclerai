@@ -7,9 +7,6 @@ from config import TOKEN
 from app.handlers import router
 from aiogram import Bot, Dispatcher
 
-# ============================================================
-# HTML СТРАНИЦА С КРАСИВЫМ ВЫВОДОМ КАРТОЧКАМИ
-# ============================================================
 
 HTML_PAGE = """<!DOCTYPE html>
 <html lang="ru">
@@ -555,10 +552,10 @@ HTML_PAGE = """<!DOCTYPE html>
         <div class="header">
             <div class="header-logo">
                 <img src="https://storage.ghost.io/c/b5/22/b52265eb-d44c-4ae8-8456-954cfb01f918/content/images/2020/07/OffensiveOsint-logo-RGB-2.png" alt="Wekness Tool" onerror="this.style.display='none'">
-                <div class="logo-text">⚡ <span>Wekness Tool</span></div>
+                <div class="logo-text">🔎 <span>Wekness Tool</span></div>
             </div>
-            <div class="sub">🔍 Поиск информации в открытых источниках</div>
-            <div class="query-box" id="queryDisplay">📌 Введите запрос</div>
+            <div class="sub">📲 Поиск информации в открытых источниках</div>
+            <div class="query-box" id="queryDisplay">🚀 Введите запрос</div>
             <div class="support-links">
                 <a href="https://trashbox.ru/topics/216477/wekness-tool" class="support-btn boosty" target="_blank">⬇️ Скачать</a>
                 <a href="https://boosty.to/wekness" class="support-btn donate-alerts" target="_blank">❤️ Поддержать</a>
