@@ -1,4 +1,4 @@
-# run.py — бот + красивый веб-интерфейс с карточками (без загрузки)
+# run.py — без разделителей и без упоминания Saverudata
 import asyncio
 import os
 import aiohttp
@@ -7,9 +7,6 @@ from config import TOKEN
 from app.handlers import router
 from aiogram import Bot, Dispatcher
 
-# ============================================================
-# HTML СТРАНИЦА С КРАСИВЫМ ВЫВОДОМ КАРТОЧКАМИ
-# ============================================================
 
 HTML_PAGE = """<!DOCTYPE html>
 <html lang="ru">
@@ -43,7 +40,6 @@ HTML_PAGE = """<!DOCTYPE html>
         
         .container { max-width: 860px; margin: 0 auto; }
         
-        /* HEADER */
         .header {
             background: linear-gradient(135deg, rgba(20, 20, 40, 0.92), rgba(40, 20, 80, 0.6));
             backdrop-filter: blur(20px);
@@ -162,7 +158,6 @@ HTML_PAGE = """<!DOCTYPE html>
             box-shadow: 0 8px 30px rgba(124, 58, 237, 0.25);
         }
         
-        /* SEARCH */
         .search-box {
             background: rgba(255,255,255,0.02);
             border-radius: 24px;
@@ -280,7 +275,6 @@ HTML_PAGE = """<!DOCTYPE html>
             border: 1px solid rgba(52, 211, 153, 0.06);
         }
         
-        /* STATS */
         .stats {
             display: flex;
             justify-content: space-around;
@@ -319,7 +313,7 @@ HTML_PAGE = """<!DOCTYPE html>
             font-weight: 400;
         }
         
-        /* CARDS */
+        /* CARDS — БЕЗ РАЗДЕЛИТЕЛЕЙ МЕЖДУ ПОЛЯМИ */
         .card {
             background: rgba(255,255,255,0.04);
             border-radius: 24px;
@@ -376,17 +370,13 @@ HTML_PAGE = """<!DOCTYPE html>
             padding: 8px 20px 18px 20px;
         }
         
+        /* УБРАЛИ border-bottom — теперь нет линий */
         .field {
             display: flex;
             justify-content: space-between;
-            padding: 8px 0;
+            padding: 6px 0;
             gap: 16px;
             align-items: baseline;
-            border-bottom: 1px solid rgba(255,255,255,0.03);
-        }
-        
-        .field:last-child {
-            border-bottom: none;
         }
         
         .field-label {
@@ -413,7 +403,6 @@ HTML_PAGE = """<!DOCTYPE html>
         .value-link { color: #60a5fa !important; text-decoration: none; }
         .value-link:hover { text-decoration: underline; }
         
-        /* LOADING — теперь просто текст, без крутилки */
         .waiting {
             text-align: center;
             padding: 60px 20px;
@@ -448,7 +437,6 @@ HTML_PAGE = """<!DOCTYPE html>
             display: none;
         }
         
-        /* TOAST */
         .toast {
             position: fixed;
             bottom: 30px;
@@ -505,7 +493,7 @@ HTML_PAGE = """<!DOCTYPE html>
             .stats .stat-card { padding: 12px 16px; }
             .stats .stat-number { font-size: 22px; }
             .card-body { padding: 8px 16px 14px 16px; }
-            .field { flex-direction: column; align-items: flex-start; gap: 2px; padding: 8px 0; }
+            .field { flex-direction: column; align-items: flex-start; gap: 2px; padding: 6px 0; }
             .field-value { text-align: left; max-width: 100%; width: 100%; font-size: 16px; }
             .field-label { font-size: 15px; }
             .search-input { flex-direction: column; }
@@ -529,7 +517,7 @@ HTML_PAGE = """<!DOCTYPE html>
             .card { border-radius: 18px; }
             .card-header { padding: 10px 14px; }
             .card-body { padding: 6px 14px 12px 14px; }
-            .field { padding: 6px 0; }
+            .field { padding: 4px 0; }
             .field-value { font-size: 15px; }
             .field-label { font-size: 14px; }
             .copy-btn { width: 24px; height: 24px; font-size: 12px; }
@@ -540,21 +528,19 @@ HTML_PAGE = """<!DOCTYPE html>
 </head>
 <body>
     <div class="container">
-        <!-- HEADER -->
         <div class="header">
             <div class="header-logo">
                 <img src="https://storage.ghost.io/c/b5/22/b52265eb-d44c-4ae8-8456-954cfb01f918/content/images/2020/07/OffensiveOsint-logo-RGB-2.png" alt="Wekness Tool" onerror="this.style.display='none'">
                 <div class="logo-text">🔎 <span>Wekness Tool</span></div>
             </div>
             <div class="sub">🔍 Поиск информации в открытых источниках</div>
-            <div class="query-box" id="queryDisplay">🚀 Введите запрос</div>
+            <div class="query-box" id="queryDisplay">📲 Введите запрос</div>
             <div class="support-links">
                 <a href="https://trashbox.ru/topics/216477/wekness-tool" class="support-btn boosty" target="_blank">⬇️ Скачать</a>
                 <a href="https://boosty.to/wekness" class="support-btn donate-alerts" target="_blank">❤️ Поддержать</a>
             </div>
         </div>
         
-        <!-- SEARCH -->
         <div class="search-box">
             <div class="search-type" id="searchType">
                 <button class="active" data-type="phone"><span class="icon">📲</span> Телефон</button>
@@ -573,7 +559,6 @@ HTML_PAGE = """<!DOCTYPE html>
             <div class="validation-msg" id="validationMsg"></div>
         </div>
         
-        <!-- STATS -->
         <div class="stats" id="statsContainer" style="display:none;">
             <div class="stat-card">
                 <span class="stat-number" id="statCount">0</span>
@@ -589,7 +574,6 @@ HTML_PAGE = """<!DOCTYPE html>
             </div>
         </div>
         
-        <!-- RESULTS -->
         <div id="resultCount"></div>
         <div class="results" id="resultsContainer">
             <div class="waiting">
@@ -597,13 +581,11 @@ HTML_PAGE = """<!DOCTYPE html>
             </div>
         </div>
         
-        <!-- FOOTER -->
         <div class="footer">
             ⚡ Wekness Tool • Данные из открытых источников
         </div>
     </div>
     
-    <!-- TOAST -->
     <div class="toast" id="toast">
         <span id="toastIcon">✅</span>
         <span id="toastMessage">Скопировано</span>
@@ -774,7 +756,7 @@ HTML_PAGE = """<!DOCTYPE html>
                     return;
                 }
                 
-                // Saverudata записи
+                // Saverudata записи — убираем упоминание "Saverudata" из названий полей
                 if (data["✅ Найдено записей (saverudata)"] && data["📋 Записи"]) {
                     const records = data["📋 Записи"];
                     const count = data["✅ Найдено записей (saverudata)"];
@@ -791,7 +773,14 @@ HTML_PAGE = """<!DOCTYPE html>
                     
                     let html = '';
                     records.forEach((record, index) => {
-                        const entries = Object.entries(record).filter(([k, v]) => v && String(v).trim());
+                        // Очищаем ключи от "Saverudata #N"
+                        let cleanedRecord = {};
+                        for (let [key, value] of Object.entries(record)) {
+                            // Убираем "📋 Saverudata #N " из названий полей
+                            let cleanKey = key.replace(/📋 Saverudata #\d+\s*/, '');
+                            cleanedRecord[cleanKey] = value;
+                        }
+                        const entries = Object.entries(cleanedRecord).filter(([k, v]) => v && String(v).trim());
                         
                         let fieldsHtml = '';
                         entries.forEach(([key, value]) => {
@@ -899,7 +888,7 @@ HTML_PAGE = """<!DOCTYPE html>
 </html>"""
 
 # ============================================================
-# ОБРАБОТЧИКИ ВЕБ-ЗАПРОСОВ
+# ОБРАБОТЧИКИ
 # ============================================================
 
 async def handle(request):
