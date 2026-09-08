@@ -1,11 +1,14 @@
-# web.py - Веб-интерфейс для ВСЕХ функций
+# web.py — Финальная версия с карточками и копированием
 import http.server
 import socketserver
 import json
 import urllib.parse
 import asyncio
 import os
+import re
+from datetime import datetime
 
+# Импортируем все функции из osint_functions.py
 from osint_functions import (
     search_phone_full,
     search_inn,
@@ -16,16 +19,953 @@ from osint_functions import (
     search_russian_db
 )
 
+# ============================================================
+# HTML СТРАНИЦА
+# ============================================================
+
+HTML = '''<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wekness Tool — OSINT</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+            background: #0a0a12;
+            color: #e8e8e8;
+            padding: 20px;
+            line-height: 1.6;
+            min-height: 100vh;
+        }
+        
+        body::before {
+            content: '';
+            position: fixed;
+            top: -20%;
+            right: -10%;
+            width: 600px;
+            height: 600px;
+            background: radial-gradient(circle, rgba(124, 58, 237, 0.06), transparent 70%);
+            pointer-events: none;
+            z-index: -1;
+        }
+        
+        .container {
+            max-width: 860px;
+            margin: 0 auto;
+        }
+        
+        /* ===== HEADER ===== */
+        .header {
+            background: linear-gradient(135deg, rgba(20, 20, 40, 0.92), rgba(40, 20, 80, 0.6));
+            backdrop-filter: blur(20px);
+            border-radius: 24px;
+            padding: 28px 32px;
+            margin-bottom: 24px;
+            border: 1px solid rgba(255,255,255,0.04);
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .header::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -20%;
+            width: 300px;
+            height: 300px;
+            background: radial-gradient(circle, rgba(124, 58, 237, 0.08), transparent 70%);
+            pointer-events: none;
+        }
+        
+        .header-logo {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 16px;
+            margin-bottom: 4px;
+            position: relative;
+            z-index: 1;
+        }
+        
+        .header-logo img {
+            width: 64px;
+            height: 64px;
+            border-radius: 16px;
+            border: 1px solid rgba(255,255,255,0.06);
+            box-shadow: 0 4px 20px rgba(124, 58, 237, 0.15);
+            object-fit: cover;
+        }
+        
+        .header-logo .logo-text {
+            font-size: 32px;
+            font-weight: 800;
+            letter-spacing: -0.5px;
+        }
+        
+        .header-logo .logo-text span {
+            background: linear-gradient(135deg, #a78bfa, #7c3aed);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        
+        .header .sub {
+            color: rgba(255,255,255,0.3);
+            font-size: 14px;
+            position: relative;
+            z-index: 1;
+        }
+        
+        .header .query-box {
+            display: inline-block;
+            margin-top: 12px;
+            background: rgba(124, 58, 237, 0.08);
+            border: 1px solid rgba(124, 58, 237, 0.1);
+            padding: 8px 24px;
+            border-radius: 40px;
+            font-size: 15px;
+            font-weight: 500;
+            color: #a78bfa;
+            position: relative;
+            z-index: 1;
+        }
+        
+        .support-links {
+            display: flex;
+            justify-content: center;
+            gap: 12px;
+            margin-top: 14px;
+            position: relative;
+            z-index: 1;
+            flex-wrap: wrap;
+        }
+        
+        .support-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            color: #fff;
+            text-decoration: none;
+            padding: 8px 20px;
+            border-radius: 40px;
+            font-size: 13px;
+            font-weight: 600;
+            transition: 0.3s;
+        }
+        
+        .support-btn.boosty {
+            background: linear-gradient(135deg, #f59e0b, #d97706);
+            box-shadow: 0 4px 20px rgba(245, 158, 11, 0.15);
+        }
+        
+        .support-btn.boosty:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 30px rgba(245, 158, 11, 0.25);
+        }
+        
+        .support-btn.donate-alerts {
+            background: linear-gradient(135deg, #7c3aed, #6d28d9);
+            box-shadow: 0 4px 20px rgba(124, 58, 237, 0.15);
+        }
+        
+        .support-btn.donate-alerts:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 30px rgba(124, 58, 237, 0.25);
+        }
+        
+        /* ===== SEARCH ===== */
+        .search-box {
+            background: rgba(255,255,255,0.02);
+            border-radius: 24px;
+            padding: 24px 28px;
+            margin-bottom: 24px;
+            border: 1px solid rgba(255,255,255,0.04);
+            backdrop-filter: blur(10px);
+        }
+        
+        .search-type {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+        
+        .search-type button {
+            padding: 12px 8px;
+            border: 2px solid rgba(255,255,255,0.04);
+            background: rgba(10, 10, 18, 0.6);
+            color: rgba(255,255,255,0.4);
+            border-radius: 12px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            letter-spacing: 0.3px;
+        }
+        
+        .search-type button:hover {
+            border-color: rgba(124, 58, 237, 0.3);
+            color: rgba(255,255,255,0.7);
+            transform: translateY(-1px);
+        }
+        
+        .search-type button.active {
+            border-color: #7c3aed;
+            color: #a78bfa;
+            background: rgba(124, 58, 237, 0.08);
+            box-shadow: 0 0 30px rgba(124, 58, 237, 0.05);
+        }
+        
+        .search-type button .icon { margin-right: 6px; }
+        
+        .search-input {
+            display: flex;
+            gap: 12px;
+        }
+        
+        .search-input input {
+            flex: 1;
+            padding: 16px 20px;
+            border-radius: 14px;
+            border: 2px solid rgba(255,255,255,0.04);
+            background: rgba(10, 10, 18, 0.6);
+            color: #e8e8e8;
+            font-size: 16px;
+            outline: none;
+            transition: all 0.3s;
+        }
+        
+        .search-input input:focus {
+            border-color: #7c3aed;
+            box-shadow: 0 0 30px rgba(124, 58, 237, 0.05);
+        }
+        
+        .search-input input::placeholder { color: rgba(255,255,255,0.15); }
+        .search-input input.error { border-color: #f87171; }
+        .search-input input.success { border-color: #34d399; }
+        
+        .search-input button {
+            padding: 16px 40px;
+            border: none;
+            border-radius: 14px;
+            background: linear-gradient(135deg, #7c3aed, #6d28d9);
+            color: #fff;
+            font-size: 16px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s;
+            letter-spacing: 0.5px;
+            white-space: nowrap;
+        }
+        
+        .search-input button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 30px rgba(124, 58, 237, 0.3);
+        }
+        
+        .search-input button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .validation-msg {
+            margin-top: 12px;
+            font-size: 13px;
+            padding: 8px 16px;
+            border-radius: 8px;
+            display: none;
+        }
+        
+        .validation-msg.error {
+            display: block;
+            color: #f87171;
+            background: rgba(248, 113, 113, 0.06);
+            border: 1px solid rgba(248, 113, 113, 0.1);
+        }
+        
+        .validation-msg.success {
+            display: block;
+            color: #34d399;
+            background: rgba(52, 211, 153, 0.04);
+            border: 1px solid rgba(52, 211, 153, 0.06);
+        }
+        
+        /* ===== STATS ===== */
+        .stats {
+            display: flex;
+            justify-content: space-around;
+            gap: 12px;
+            margin-bottom: 24px;
+            flex-wrap: wrap;
+        }
+        
+        .stats .stat-card {
+            background: rgba(255,255,255,0.02);
+            border-radius: 16px;
+            padding: 14px 24px;
+            text-align: center;
+            border: 1px solid rgba(255,255,255,0.04);
+            transition: 0.3s;
+            flex: 1;
+            min-width: 100px;
+        }
+        
+        .stats .stat-card:hover {
+            border-color: rgba(124, 58, 237, 0.08);
+            background: rgba(255,255,255,0.04);
+        }
+        
+        .stats .stat-number {
+            font-size: 28px;
+            font-weight: 800;
+            color: #a78bfa;
+            display: block;
+            letter-spacing: -0.5px;
+        }
+        
+        .stats .stat-label {
+            font-size: 12px;
+            color: rgba(255,255,255,0.3);
+            font-weight: 400;
+        }
+        
+        /* ===== CARDS ===== */
+        .card {
+            background: rgba(255,255,255,0.04);
+            border-radius: 24px;
+            margin-bottom: 18px;
+            border: 1px solid rgba(255,255,255,0.06);
+            overflow: hidden;
+            transition: all 0.3s;
+            box-shadow: 0 4px 24px rgba(0,0,0,0.2);
+        }
+        
+        .card:hover {
+            transform: translateY(-3px);
+            border-color: rgba(124, 58, 237, 0.15);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+        }
+        
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 14px 20px;
+            background: rgba(255,255,255,0.02);
+            border-bottom: none;
+        }
+        
+        .card-number {
+            font-weight: 600;
+            font-size: 14px;
+            color: rgba(255,255,255,0.3);
+        }
+        
+        .copy-btn {
+            background: rgba(255,255,255,0.06);
+            border: 1px solid rgba(255,255,255,0.06);
+            color: rgba(255,255,255,0.5);
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            font-size: 16px;
+            cursor: pointer;
+            transition: 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: inherit;
+        }
+        
+        .copy-btn:hover {
+            background: rgba(124, 58, 237, 0.12);
+            border-color: rgba(124, 58, 237, 0.15);
+            color: #a78bfa;
+        }
+        
+        .card-body {
+            padding: 8px 20px 18px 20px;
+        }
+        
+        .field {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            gap: 16px;
+            align-items: baseline;
+            border-bottom: 1px solid rgba(255,255,255,0.03);
+        }
+        
+        .field:last-child {
+            border-bottom: none;
+        }
+        
+        .field-label {
+            color: rgba(255,255,255,0.5);
+            font-size: 16px;
+            white-space: nowrap;
+            font-weight: 400;
+        }
+        
+        .field-value {
+            color: #e8e8e8;
+            font-size: 17px;
+            text-align: right;
+            word-break: break-word;
+            max-width: 60%;
+            font-weight: 500;
+        }
+        
+        .value-email { color: #a78bfa !important; }
+        .value-phone { color: #34d399 !important; }
+        .value-ip { color: #fbbf24 !important; }
+        .value-status { color: #f87171 !important; font-weight: 600 !important; }
+        .value-name { color: #e8e8e8 !important; font-weight: 600 !important; }
+        .value-link { color: #60a5fa !important; text-decoration: none; }
+        .value-link:hover { text-decoration: underline; }
+        
+        /* ===== TOAST ===== */
+        .toast {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%) translateY(20px);
+            background: rgba(20, 20, 40, 0.95);
+            backdrop-filter: blur(20px);
+            padding: 14px 28px;
+            border-radius: 16px;
+            border: 1px solid rgba(255,255,255,0.06);
+            color: #e8e8e8;
+            font-size: 15px;
+            font-weight: 500;
+            opacity: 0;
+            transition: all 0.4s ease;
+            pointer-events: none;
+            z-index: 999;
+            box-shadow: 0 8px 40px rgba(0,0,0,0.4);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .toast.show {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+            pointer-events: auto;
+        }
+        
+        .toast.error {
+            border-color: rgba(248, 113, 113, 0.15);
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 60px 20px;
+            color: rgba(255,255,255,0.2);
+        }
+        
+        .loading .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid rgba(255,255,255,0.04);
+            border-top-color: #7c3aed;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin: 0 auto 20px;
+        }
+        
+        @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        
+        .error {
+            background: rgba(248, 113, 113, 0.06);
+            border: 1px solid rgba(248, 113, 113, 0.1);
+            color: #f87171;
+            padding: 16px 20px;
+            border-radius: 16px;
+            margin-top: 20px;
+        }
+        
+        .no-results {
+            text-align: center;
+            color: rgba(255,255,255,0.15);
+            padding: 60px 20px;
+            font-size: 16px;
+        }
+        
+        #resultCount {
+            background: rgba(255,255,255,0.02);
+            border-radius: 12px;
+            padding: 10px 16px;
+            margin-top: 16px;
+            color: rgba(255,255,255,0.3);
+            font-size: 13px;
+            border: 1px solid rgba(255,255,255,0.03);
+            display: none;
+        }
+        
+        .record-block {
+            background: rgba(10, 10, 18, 0.8);
+            border-radius: 10px;
+            padding: 16px;
+            margin-bottom: 12px;
+            border-left: 3px solid #7c3aed;
+        }
+        
+        .record-title {
+            color: #a78bfa;
+            font-weight: 600;
+            font-size: 13px;
+            margin-bottom: 8px;
+        }
+        
+        .footer {
+            text-align: center;
+            margin-top: 28px;
+            padding-top: 20px;
+            border-top: 1px solid rgba(255,255,255,0.03);
+            color: rgba(255,255,255,0.08);
+            font-size: 12px;
+        }
+        
+        .footer a { color: rgba(255,255,255,0.1); text-decoration: none; transition: 0.2s; }
+        .footer a:hover { color: #a78bfa; }
+        
+        @media (max-width: 768px) {
+            body { padding: 12px; }
+            .header { padding: 20px 16px; }
+            .header-logo .logo-text { font-size: 24px; }
+            .header-logo img { width: 48px; height: 48px; }
+            .header .query-box { font-size: 13px; padding: 6px 18px; }
+            .search-type { grid-template-columns: repeat(2, 1fr); }
+            .stats { flex-direction: column; gap: 8px; }
+            .stats .stat-card { padding: 12px 16px; }
+            .stats .stat-number { font-size: 22px; }
+            .card-body { padding: 8px 16px 14px 16px; }
+            .field { flex-direction: column; align-items: flex-start; gap: 2px; padding: 8px 0; }
+            .field-value { text-align: left; max-width: 100%; width: 100%; font-size: 16px; }
+            .field-label { font-size: 15px; }
+            .search-input { flex-direction: column; }
+            .search-input button { padding: 14px; }
+            .support-links { flex-direction: column; align-items: center; }
+            .support-btn { width: 100%; justify-content: center; }
+            .copy-btn { width: 28px; height: 28px; font-size: 14px; }
+            .toast { font-size: 13px; padding: 12px 20px; }
+        }
+        
+        @media (max-width: 480px) {
+            body { padding: 8px; }
+            .header { padding: 16px 12px; border-radius: 16px; }
+            .header-logo .logo-text { font-size: 20px; }
+            .header-logo img { width: 40px; height: 40px; }
+            .header .query-box { font-size: 11px; padding: 4px 14px; }
+            .search-box { padding: 16px 16px; }
+            .search-type { grid-template-columns: repeat(2, 1fr); }
+            .stats .stat-card { padding: 10px 12px; }
+            .stats .stat-number { font-size: 18px; }
+            .card { border-radius: 18px; }
+            .card-header { padding: 10px 14px; }
+            .card-body { padding: 6px 14px 12px 14px; }
+            .field { padding: 6px 0; }
+            .field-value { font-size: 15px; }
+            .field-label { font-size: 14px; }
+            .copy-btn { width: 24px; height: 24px; font-size: 12px; }
+            .support-btn { font-size: 12px; padding: 6px 16px; }
+            .toast { font-size: 12px; padding: 10px 16px; bottom: 16px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- HEADER -->
+        <div class="header">
+            <div class="header-logo">
+                <img src="https://storage.ghost.io/c/b5/22/b52265eb-d44c-4ae8-8456-954cfb01f918/content/images/2020/07/OffensiveOsint-logo-RGB-2.png" alt="Wekness Tool" onerror="this.style.display='none'">
+                <div class="logo-text">⚡ <span>Wekness Tool</span></div>
+            </div>
+            <div class="sub">🔍 Поиск информации в открытых источниках</div>
+            <div class="query-box" id="queryDisplay">📌 Введите запрос</div>
+            <div class="support-links">
+                <a href="https://trashbox.ru/topics/216477/wekness-tool" class="support-btn boosty" target="_blank">⬇️ Скачать</a>
+                <a href="https://boosty.to/wekness" class="support-btn donate-alerts" target="_blank">❤️ Поддержать</a>
+            </div>
+        </div>
+        
+        <!-- SEARCH -->
+        <div class="search-box">
+            <div class="search-type" id="searchType">
+                <button class="active" data-type="phone"><span class="icon">📲</span> Телефон</button>
+                <button data-type="inn"><span class="icon">🆔</span> ИНН</button>
+                <button data-type="email"><span class="icon">📧</span> E-mail</button>
+                <button data-type="vk"><span class="icon">🔵</span> VK</button>
+                <button data-type="ip"><span class="icon">🏙️</span> IP</button>
+                <button data-type="whois"><span class="icon">🌍</span> WHOIS</button>
+                <button data-type="russian_db"><span class="icon">🇷🇺</span> РФ База</button>
+            </div>
+            
+            <div class="search-input">
+                <input type="text" id="queryInput" placeholder="Введите данные для поиска..." />
+                <button id="searchBtn">🔍 Найти</button>
+            </div>
+            
+            <div class="validation-msg" id="validationMsg"></div>
+        </div>
+        
+        <!-- STATS -->
+        <div class="stats" id="statsContainer" style="display:none;">
+            <div class="stat-card">
+                <span class="stat-number" id="statCount">0</span>
+                <span class="stat-label">Найдено записей</span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-number" id="statFields">0</span>
+                <span class="stat-label">Всего полей</span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-number" id="statDate">--</span>
+                <span class="stat-label">Дата отчёта</span>
+            </div>
+        </div>
+        
+        <!-- RESULTS -->
+        <div id="resultCount"></div>
+        <div class="results" id="resultsContainer">
+            <div class="loading">
+                <div class="spinner"></div>
+                <p>Введите запрос для поиска</p>
+            </div>
+        </div>
+        
+        <!-- FOOTER -->
+        <div class="footer">
+            ⚡ Wekness Tool • Данные из открытых источников
+        </div>
+    </div>
+    
+    <!-- TOAST -->
+    <div class="toast" id="toast">
+        <span id="toastIcon">✅</span>
+        <span id="toastMessage">Скопировано</span>
+    </div>
+    
+    <script>
+        const searchType = document.getElementById('searchType');
+        const queryInput = document.getElementById('queryInput');
+        const searchBtn = document.getElementById('searchBtn');
+        const resultsContainer = document.getElementById('resultsContainer');
+        const resultCount = document.getElementById('resultCount');
+        const validationMsg = document.getElementById('validationMsg');
+        const queryDisplay = document.getElementById('queryDisplay');
+        const statsContainer = document.getElementById('statsContainer');
+        const statCount = document.getElementById('statCount');
+        const statFields = document.getElementById('statFields');
+        const statDate = document.getElementById('statDate');
+
+        let currentType = 'phone';
+
+        const placeholders = {
+            phone: '+375331234567 или 89123456789',
+            inn: '1234567890',
+            email: 'example@mail.com',
+            vk: '123456789',
+            ip: '192.168.1.1',
+            whois: 'example.com',
+            russian_db: '79123456789'
+        };
+
+        const typeNames = {
+            phone: '📲 Телефон',
+            inn: '🆔 ИНН',
+            email: '📧 E-mail',
+            vk: '🔵 VK',
+            ip: '🏙️ IP',
+            whois: '🌍 WHOIS',
+            russian_db: '🇷🇺 РФ База'
+        };
+
+        // Валидация телефона
+        function validatePhone(phone) {
+            const clean = phone.replace(/[^\d+]/g, '');
+            if (!clean) return { valid: false, msg: '❌ Введите номер телефона' };
+            let num = clean;
+            if (num.startsWith('+')) num = num.slice(1);
+            const ruPattern = /^(7|8)\d{10}$/;
+            const byPattern = /^375\d{9}$/;
+            if (ruPattern.test(num)) return { valid: true, msg: '✅ Российский номер' };
+            if (byPattern.test(num)) return { valid: true, msg: '✅ Белорусский номер' };
+            if (num.length < 10) return { valid: false, msg: '❌ Слишком короткий номер' };
+            if (num.length > 12) return { valid: false, msg: '❌ Слишком длинный номер' };
+            return { valid: false, msg: '❌ Неверный формат. Используйте РФ (7/8...) или РБ (375...)' };
+        }
+
+        // Выбор типа
+        searchType.addEventListener('click', (e) => {
+            const btn = e.target.closest('button');
+            if (!btn) return;
+            searchType.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            currentType = btn.dataset.type;
+            queryInput.placeholder = placeholders[currentType] || 'Введите данные...';
+            queryDisplay.textContent = `📌 ${typeNames[currentType]}`;
+            validationMsg.className = 'validation-msg';
+            validationMsg.textContent = '';
+            queryInput.classList.remove('error', 'success');
+            queryInput.focus();
+        });
+
+        // Валидация при вводе
+        queryInput.addEventListener('input', () => {
+            if (currentType === 'phone') {
+                const result = validatePhone(queryInput.value);
+                if (result.valid) {
+                    validationMsg.className = 'validation-msg success';
+                    validationMsg.textContent = result.msg;
+                    queryInput.classList.remove('error');
+                    queryInput.classList.add('success');
+                } else if (queryInput.value.length > 0) {
+                    validationMsg.className = 'validation-msg error';
+                    validationMsg.textContent = result.msg;
+                    queryInput.classList.remove('success');
+                    queryInput.classList.add('error');
+                } else {
+                    validationMsg.className = 'validation-msg';
+                    validationMsg.textContent = '';
+                    queryInput.classList.remove('error', 'success');
+                }
+            }
+        });
+
+        // Toast
+        function showToast(msg, isError) {
+            const toast = document.getElementById('toast');
+            const toastMsg = document.getElementById('toastMessage');
+            const toastIcon = document.getElementById('toastIcon');
+            toastMsg.textContent = msg;
+            toastIcon.textContent = isError ? '❌' : '✅';
+            toast.className = 'toast' + (isError ? ' error' : '');
+            toast.classList.add('show');
+            clearTimeout(toast._timeout);
+            toast._timeout = setTimeout(() => toast.classList.remove('show'), 3500);
+        }
+
+        // Копирование карточки
+        function copyCard(index) {
+            const card = document.getElementById('card-' + index);
+            if (!card) return;
+            let text = '';
+            const fields = card.querySelectorAll('.field');
+            fields.forEach((field) => {
+                const label = field.querySelector('.field-label')?.textContent?.trim() || '';
+                const value = field.querySelector('.field-value')?.textContent?.trim() || '';
+                if (value) {
+                    text += label + ': ' + value + '\\n';
+                }
+            });
+            if (!text) {
+                showToast('Нет данных для копирования', true);
+                return;
+            }
+            navigator.clipboard.writeText(text).then(() => {
+                showToast('✅ Данные скопированы');
+            }).catch(() => {
+                showToast('❌ Ошибка копирования', true);
+            });
+        }
+
+        // Escape HTML
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Основной поиск
+        async function performSearch() {
+            const query = queryInput.value.trim();
+            if (!query) {
+                resultsContainer.innerHTML = '<div class="no-results">Введите запрос</div>';
+                resultCount.style.display = 'none';
+                statsContainer.style.display = 'none';
+                return;
+            }
+            
+            if (currentType === 'phone') {
+                const result = validatePhone(query);
+                if (!result.valid) {
+                    validationMsg.className = 'validation-msg error';
+                    validationMsg.textContent = result.msg;
+                    queryInput.classList.add('error');
+                    return;
+                }
+            }
+            
+            resultsContainer.innerHTML = '<div class="loading"><div class="spinner"></div><p>🔍 Поиск данных...</p></div>';
+            resultCount.style.display = 'none';
+            statsContainer.style.display = 'none';
+            searchBtn.disabled = true;
+            
+            try {
+                const response = await fetch('/search', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ type: currentType, query: query })
+                });
+                
+                const data = await response.json();
+                
+                if (data.error) {
+                    resultsContainer.innerHTML = `<div class="error">❌ ${data.error}</div>`;
+                    return;
+                }
+                
+                // Проверяем на записи saverudata
+                if (data["✅ Найдено записей (saverudata)"] && data["📋 Записи"]) {
+                    const records = data["📋 Записи"];
+                    const count = data["✅ Найдено записей (saverudata)"];
+                    
+                    resultCount.textContent = `🔍 Найдено записей: ${count}`;
+                    resultCount.style.display = 'block';
+                    
+                    // Статистика
+                    let totalFields = 0;
+                    records.forEach(r => { totalFields += Object.keys(r).length; });
+                    statCount.textContent = count;
+                    statFields.textContent = totalFields;
+                    statDate.textContent = new Date().toLocaleDateString('ru-RU', {day:'2-digit', month:'2-digit'});
+                    statsContainer.style.display = 'flex';
+                    
+                    let html = '';
+                    records.forEach((record, index) => {
+                        const entries = Object.entries(record).filter(([k, v]) => v && String(v).trim());
+                        
+                        let fieldsHtml = '';
+                        entries.forEach(([key, value]) => {
+                            let cls = '';
+                            const val = String(value);
+                            if (key.includes('Email') || key.includes('email')) cls = 'value-email';
+                            else if (key.includes('Телефон') || key.includes('номер')) cls = 'value-phone';
+                            else if (key.includes('IP')) cls = 'value-ip';
+                            else if (key.includes('Имя') || key.includes('ФИО')) cls = 'value-name';
+                            else if (key.includes('Статус')) cls = 'value-status';
+                            
+                            fieldsHtml += `
+                                <div class="field">
+                                    <span class="field-label">${key}</span>
+                                    <span class="field-value ${cls}">${escapeHtml(val)}</span>
+                                </div>
+                            `;
+                        });
+                        
+                        html += `
+                            <div class="card" id="card-${index}">
+                                <div class="card-header">
+                                    <span class="card-number">📋 Запись #${index + 1}</span>
+                                    <button class="copy-btn" onclick="copyCard(${index})" title="Копировать">📋</button>
+                                </div>
+                                <div class="card-body">${fieldsHtml}</div>
+                            </div>
+                        `;
+                    });
+                    
+                    resultsContainer.innerHTML = html;
+                    return;
+                }
+                
+                // Обычный результат
+                const entries = Object.entries(data).filter(([k, v]) => v && String(v).trim());
+                
+                if (entries.length === 0) {
+                    resultsContainer.innerHTML = '<div class="no-results">😕 Ничего не найдено</div>';
+                    resultCount.style.display = 'none';
+                    statsContainer.style.display = 'none';
+                    return;
+                }
+                
+                resultCount.textContent = `🔍 Найдено записей: ${entries.length}`;
+                resultCount.style.display = 'block';
+                
+                // Статистика
+                statCount.textContent = entries.length;
+                statFields.textContent = entries.length;
+                statDate.textContent = new Date().toLocaleDateString('ru-RU', {day:'2-digit', month:'2-digit'});
+                statsContainer.style.display = 'flex';
+                
+                let fieldsHtml = '';
+                entries.forEach(([key, value]) => {
+                    let cls = '';
+                    const val = String(value);
+                    if (key.includes('Email') || key.includes('email')) cls = 'value-email';
+                    else if (key.includes('Телефон') || key.includes('номер')) cls = 'value-phone';
+                    else if (key.includes('IP')) cls = 'value-ip';
+                    else if (key.includes('Имя') || key.includes('ФИО')) cls = 'value-name';
+                    else if (key.includes('Статус')) cls = 'value-status';
+                    
+                    if (val.startsWith('http')) {
+                        fieldsHtml += `
+                            <div class="field">
+                                <span class="field-label">${key}</span>
+                                <span class="field-value"><a href="${val}" target="_blank" class="value-link">${escapeHtml(val)}</a></span>
+                            </div>
+                        `;
+                    } else {
+                        fieldsHtml += `
+                            <div class="field">
+                                <span class="field-label">${key}</span>
+                                <span class="field-value ${cls}">${escapeHtml(val)}</span>
+                            </div>
+                        `;
+                    }
+                });
+                
+                const html = `
+                    <div class="card" id="card-0">
+                        <div class="card-header">
+                            <span class="card-number">📋 Результаты поиска</span>
+                            <button class="copy-btn" onclick="copyCard(0)" title="Копировать">📋</button>
+                        </div>
+                        <div class="card-body">${fieldsHtml}</div>
+                    </div>
+                `;
+                
+                resultsContainer.innerHTML = html;
+                
+            } catch (error) {
+                resultsContainer.innerHTML = `<div class="error">❌ Ошибка: ${error.message}</div>`;
+            } finally {
+                searchBtn.disabled = false;
+            }
+        }
+
+        searchBtn.addEventListener('click', performSearch);
+        queryInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') performSearch(); });
+        queryInput.focus();
+        queryDisplay.textContent = '📌 Телефон';
+    </script>
+</body>
+</html>'''
+
+# ============================================================
+# CSS и JS (встроены в HTML)
+# ============================================================
+
+CSS = ''''''
+JS = ''''''
+
+# ============================================================
+# ОБРАБОТЧИКИ
+# ============================================================
+
 class SearchHandler(http.server.SimpleHTTPRequestHandler):
     
     def do_GET(self):
         parsed = urllib.parse.urlparse(self.path)
         if parsed.path == '/':
             self.send_html()
-        elif parsed.path == '/style.css':
-            self.send_css()
-        elif parsed.path == '/script.js':
-            self.send_js()
         else:
             self.send_error(404)
     
@@ -82,6 +1022,7 @@ class SearchHandler(http.server.SimpleHTTPRequestHandler):
     def send_json(self, data):
         self.send_response(200)
         self.send_header('Content-type', 'application/json; charset=utf-8')
+        self.send_header('Access-Control-Allow-Origin', '*')
         self.end_headers()
         self.wfile.write(json.dumps(data, ensure_ascii=False, indent=2).encode('utf-8'))
     
@@ -91,202 +1032,8 @@ class SearchHandler(http.server.SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(HTML.encode('utf-8'))
     
-    def send_css(self):
-        self.send_response(200)
-        self.send_header('Content-type', 'text/css')
-        self.end_headers()
-        self.wfile.write(CSS.encode('utf-8'))
-    
-    def send_js(self):
-        self.send_response(200)
-        self.send_header('Content-type', 'application/javascript')
-        self.end_headers()
-        self.wfile.write(JS.encode('utf-8'))
-    
     def log_message(self, format, *args):
         pass
-
-# ============================================================
-# HTML
-# ============================================================
-
-HTML = '''<!DOCTYPE html>
-<html lang="ru">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OSINT Search</title>
-    <link rel="stylesheet" href="/style.css">
-</head>
-<body>
-    <div class="container">
-        <div class="header">
-            <h1>🔍 OSINT Search</h1>
-            <p>Поиск информации в открытых источниках</p>
-        </div>
-        
-        <div class="search-box">
-            <div class="search-type" id="searchType">
-                <button class="active" data-type="phone">📱 Телефон</button>
-                <button data-type="russian_db">🇷🇺 РФ База</button>
-                <button data-type="inn">🆔 ИНН</button>
-                <button data-type="email">📧 Email</button>
-                <button data-type="vk">📘 VK</button>
-                <button data-type="ip">🌐 IP</button>
-                <button data-type="whois">🌍 WHOIS</button>
-            </div>
-            
-            <div class="search-input">
-                <input type="text" id="queryInput" placeholder="Введите данные для поиска..." />
-                <button id="searchBtn">🔍 Найти</button>
-            </div>
-        </div>
-        
-        <div id="resultCount"></div>
-        <div class="results" id="resultsContainer">
-            <div class="loading">
-                <div class="spinner"></div>
-                <p>Введите запрос для поиска</p>
-            </div>
-        </div>
-    </div>
-    
-    <script src="/script.js"></script>
-</body>
-</html>'''
-
-CSS = '''* { margin: 0; padding: 0; box-sizing: border-box; }
-body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #0a0a0f; color: #e0e0e0; min-height: 100vh; }
-.container { max-width: 700px; margin: 0 auto; padding: 40px 20px; }
-.header { text-align: center; padding: 40px 0; border-bottom: 1px solid #1a1a2e; }
-.header h1 { font-size: 38px; background: linear-gradient(135deg, #00d4ff, #7b2ffc); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 10px; }
-.header p { color: #888; font-size: 16px; }
-.search-box { background: #12121f; border-radius: 16px; padding: 30px; margin-top: 30px; border: 1px solid #1a1a2e; }
-.search-type { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
-.search-type button { flex: 1; padding: 10px 14px; border: 2px solid #1a1a2e; background: transparent; color: #888; border-radius: 10px; cursor: pointer; font-size: 13px; transition: all 0.3s; min-width: 70px; }
-.search-type button:hover { border-color: #00d4ff; color: #fff; }
-.search-type button.active { border-color: #7b2ffc; color: #fff; background: rgba(123, 47, 252, 0.1); }
-.search-input { display: flex; gap: 12px; }
-.search-input input { flex: 1; padding: 16px 20px; border-radius: 12px; border: 2px solid #1a1a2e; background: #0a0a12; color: #fff; font-size: 16px; outline: none; transition: border-color 0.3s; }
-.search-input input:focus { border-color: #7b2ffc; }
-.search-input input::placeholder { color: #555; }
-.search-input button { padding: 16px 40px; border: none; border-radius: 12px; background: linear-gradient(135deg, #00d4ff, #7b2ffc); color: #fff; font-size: 16px; font-weight: 600; cursor: pointer; transition: transform 0.2s; }
-.search-input button:hover { transform: scale(1.02); }
-.search-input button:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
-.results { margin-top: 30px; }
-.result-card { background: #12121f; border-radius: 12px; padding: 16px 20px; margin-bottom: 10px; border: 1px solid #1a1a2e; animation: fadeIn 0.3s ease; display: flex; gap: 12px; align-items: flex-start; }
-.result-card .key { color: #7b2ffc; font-weight: 600; font-size: 14px; min-width: 120px; flex-shrink: 0; }
-.result-card .value { color: #e0e0e0; font-size: 15px; word-break: break-all; }
-.loading { text-align: center; padding: 60px 20px; color: #888; font-size: 18px; }
-.loading .spinner { width: 40px; height: 40px; border: 4px solid #1a1a2e; border-top-color: #7b2ffc; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 20px; }
-@keyframes spin { to { transform: rotate(360deg); } }
-@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-.error { background: rgba(255,50,50,0.1); border: 1px solid #ff3333; color: #ff5555; padding: 16px 20px; border-radius: 12px; margin-top: 20px; }
-.no-results { text-align: center; color: #666; padding: 40px 20px; font-size: 16px; }
-#resultCount { background: #12121f; border-radius: 8px; padding: 10px 16px; margin-top: 20px; color: #888; font-size: 14px; border: 1px solid #1a1a2e; display: none; }
-.record-block { background: #0a0a12; border-radius: 10px; padding: 16px; margin-bottom: 12px; border-left: 3px solid #7b2ffc; }
-.record-title { color: #7b2ffc; font-weight: 600; font-size: 13px; margin-bottom: 8px; }
-@media (max-width: 600px) { .container { padding: 20px 12px; } .header h1 { font-size: 28px; } .search-type button { font-size: 11px; padding: 8px 6px; } .search-input { flex-direction: column; } .search-input button { padding: 14px; } .result-card { flex-direction: column; gap: 4px; } .result-card .key { min-width: auto; } }'''
-
-JS = '''const searchType = document.getElementById('searchType');
-const queryInput = document.getElementById('queryInput');
-const searchBtn = document.getElementById('searchBtn');
-const resultsContainer = document.getElementById('resultsContainer');
-const resultCount = document.getElementById('resultCount');
-
-let currentType = 'phone';
-
-const placeholders = {
-    phone: '+375331234567 или +79123456789',
-    russian_db: '79123456789',
-    inn: '1234567890',
-    email: 'example@mail.com',
-    vk: '123456789',
-    ip: '192.168.1.1',
-    whois: 'example.com'
-};
-
-searchType.addEventListener('click', (e) => {
-    const btn = e.target.closest('button');
-    if (!btn) return;
-    searchType.querySelectorAll('button').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    currentType = btn.dataset.type;
-    queryInput.placeholder = placeholders[currentType] || 'Введите данные...';
-    queryInput.focus();
-});
-
-async function performSearch() {
-    const query = queryInput.value.trim();
-    if (!query) {
-        resultsContainer.innerHTML = '<div class="no-results">Введите запрос</div>';
-        resultCount.style.display = 'none';
-        return;
-    }
-    
-    resultsContainer.innerHTML = '<div class="loading"><div class="spinner"></div><p>Поиск...</p></div>';
-    resultCount.style.display = 'none';
-    searchBtn.disabled = true;
-    
-    try {
-        const response = await fetch('/search', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ type: currentType, query: query })
-        });
-        
-        const data = await response.json();
-        
-        if (data.error) {
-            resultsContainer.innerHTML = `<div class="error">❌ ${data.error}</div>`;
-            return;
-        }
-        
-        if (data["✅ Найдено записей"] && data["📋 Записи"]) {
-            const records = data["📋 Записи"];
-            resultCount.textContent = `🔍 Найдено записей: ${data["✅ Найдено записей"]}`;
-            resultCount.style.display = 'block';
-            let html = '';
-            records.forEach((record, index) => {
-                html += `<div class="record-block"><div class="record-title">📋 Запись #${index + 1}</div>`;
-                for (const [key, value] of Object.entries(record)) {
-                    if (value) {
-                        html += `<div class="result-card"><span class="key">${key}</span><span class="value">${value}</span></div>`;
-                    }
-                }
-                html += '</div>';
-            });
-            resultsContainer.innerHTML = html;
-            return;
-        }
-        
-        const entries = Object.entries(data).filter(([k, v]) => v && String(v).trim());
-        
-        if (entries.length === 0) {
-            resultsContainer.innerHTML = '<div class="no-results">😕 Ничего не найдено</div>';
-            return;
-        }
-        
-        let html = '';
-        for (const [key, value] of entries) {
-            let displayValue = String(value);
-            if (displayValue.startsWith('http')) {
-                displayValue = `<a href="${displayValue}" target="_blank">${displayValue}</a>`;
-            }
-            html += `<div class="result-card"><span class="key">${key}</span><span class="value">${displayValue}</span></div>`;
-        }
-        resultsContainer.innerHTML = html;
-        
-    } catch (error) {
-        resultsContainer.innerHTML = `<div class="error">❌ Ошибка: ${error.message}</div>`;
-    } finally {
-        searchBtn.disabled = false;
-    }
-}
-
-searchBtn.addEventListener('click', performSearch);
-queryInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') performSearch(); });
-queryInput.focus();'''
 
 # ============================================================
 # ЗАПУСК
@@ -295,9 +1042,10 @@ queryInput.focus();'''
 def start_server(port=10000):
     with socketserver.TCPServer(("0.0.0.0", port), SearchHandler) as httpd:
         print(f"\n{'='*50}")
-        print(f"🔍 OSINT Веб-интерфейс")
+        print(f"🔍 Wekness Tool — OSINT")
         print(f"{'='*50}")
         print(f"🌐 http://localhost:{port}")
+        print(f"📱 Открой в браузере")
         print(f"Нажми Ctrl+C для остановки")
         print(f"{'='*50}\n")
         try:
