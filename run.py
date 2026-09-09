@@ -540,7 +540,7 @@ HTML_PAGE = """<!DOCTYPE html>
                 <div class="logo-text">🔎<span>Wekness Tool</span></div>
             </div>
             <div class="sub">🔍 Поиск информации в открытых источниках</div>
-            <div class="query-box" id="queryDisplay">🚀 Введите запрос</div>
+            <div class="query-box" id="queryDisplay">Введите запрос</div>
             <div class="support-links">
                 <a href="https://trashbox.ru/topics/216477/wekness-tool" class="support-btn boosty" target="_blank">⬇️ Скачать</a>
                 <a href="https://boosty.to/wekness" class="support-btn donate-alerts" target="_blank">❤️ Поддержать</a>
@@ -588,7 +588,7 @@ HTML_PAGE = """<!DOCTYPE html>
         </div>
         
         <div class="footer">
-            ⚡ Wekness Tool • Данные из открытых источников
+            🔎 Wekness Tool • Данные из открытых источников
         </div>
     </div>
     
@@ -651,7 +651,7 @@ HTML_PAGE = """<!DOCTYPE html>
             btn.classList.add('active');
             currentType = btn.dataset.type;
             queryInput.placeholder = placeholders[currentType] || 'Введите данные...';
-            queryDisplay.textContent = `📌 ${typeNames[currentType]}`;
+            queryDisplay.textContent = `${typeNames[currentType]}`;
             validationMsg.className = 'validation-msg';
             validationMsg.textContent = '';
             queryInput.classList.remove('error', 'success');
